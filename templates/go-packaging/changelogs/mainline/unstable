@@ -1,0 +1,5 @@
+golang-__GO_MINOR__ (__GO_MINOR__.0.0-1+unstable1) unstable; urgency=medium
+
+  * Initial Dockershelf repackage of official precompiled Go __GO_MINOR__.
+
+ -- Luis Alejandro Martínez Faneyth <luis@luisalejandro.org>  Mon, 15 Jun 2026 00:00:00 +0000

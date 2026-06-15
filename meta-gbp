@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+"""meta-gbp: manages mainline releases for Dockershelf Go repackaging."""
+from __future__ import annotations
+
+import argparse
+import functools
+import os
+import os.path
+import platform
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from typing import NamedTuple
+
+_DIRNAME_PAT = re.compile(r'^go(\d+\.\d+)$')
+VERSION_LINE_RE = re.compile(r'^go(\d+\.\d+\.\d+)((?:rc|beta)\d+)?')
+
+HERE = os.path.abspath(os.path.dirname(__file__))
+BUILD = os.path.join(HERE, 'build')
+TOOLS = os.path.join(HERE, 'tools')
+RESOLVE_PATCH = os.path.join(HERE, 'scripts', 'resolve-go-patch.py')
+
+
+@functools.lru_cache
+def _go_minor() -> str:
+    dirname = os.path.basename(os.getcwd())
+    match = _DIRNAME_PAT.match(dirname)
+    if not match:
+        raise SystemExit(f'not a meta-gbp repo? expected go#.# dir: {dirname}')
+    return match[1]
+
+
+def _go_arch() -> str:
+    override = os.environ.get('GO_CI_ARCH', '').strip()
+    if override:
+        return override
+    machine = platform.machine().lower()
+    if machine in ('x86_64', 'amd64'):
+        return 'amd64'
+    if machine in ('aarch64', 'arm64'):
+        return 'arm64'
+    if machine in ('armv7l', 'armv6l'):
+        return 'armv6l'
+    raise SystemExit(f'unsupported architecture: {machine}')
+
+
+class Version(NamedTuple):
+    version: str
+    extra: str
+
+    @property
+    def pkg_name(self) -> str:
+        return f'golang-{_go_minor()}-go'
+
+    @property
+    def debian_version(self) -> str:
+        extra = f'~{self.extra}' if self.extra else ''
+        return f'{self.version}{extra}'
+
+    @property
+    def filename(self) -> str:
+        return f'go{self.debian_version}.linux-{_go_arch()}.tar.gz'
+
+    @property
+    def download_url(self) -> str:
+        return f'https://go.dev/dl/{self.filename}'
+
+
+def _read_current_version() -> Version:
+    with open('go/VERSION', encoding='utf-8') as fh:
+        line = fh.readline().strip()
+    match = VERSION_LINE_RE.match(line)
+    if match is None:
+        raise SystemExit(f'Unexpected go/VERSION line: {line}')
+    return Version(match[1], match[2] or '')
+
+
+def _p_cmd(cmd: tuple[str, ...], cwd: str | None) -> None:
+    cwd_s = f'({cwd})' if cwd else ''
+    print(f'{cwd_s}+ {shlex.join(cmd)}', file=sys.stderr)
+
+
+def _cmd_q(*cmd: str, cwd: str | None = None) -> None:
+    _p_cmd(cmd, cwd)
+    ret = subprocess.call(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if ret:
+        raise SystemExit(f'`{shlex.join(cmd)}` raised {ret}')
+
+
+def _cmd_o(*cmd: str, cwd: str | None = None) -> str:
+    _p_cmd(cmd, cwd)
+    ret = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, text=True)
+    if ret.returncode:
+        raise SystemExit(f'`{shlex.join(cmd)}` raised {ret.returncode}')
+    return ret.stdout
+
+
+def _cmd_r(*cmd: str, cwd: str | None = None) -> int:
+    _p_cmd(cmd, cwd)
+    return subprocess.call(cmd, cwd=cwd)
+
+
+def _resolve_latest_patch(minor: str) -> str:
+    return subprocess.check_output(
+        (sys.executable, RESOLVE_PATCH, minor),
+        text=True,
+    ).strip()
+
+
+def _download(url: str, dest: str) -> None:
+    if shutil.which('curl'):
+        _cmd_q('curl', '-fsSL', url, '-o', dest)
+    elif shutil.which('wget'):
+        _cmd_q('wget', '--quiet', '--output-document', dest, url)
+    else:
+        raise SystemExit('curl or wget required to download upstream Go tarball')
+
+
+def _replace_go_tree(patch: str) -> None:
+    version = Version(patch, '')
+    with tempfile.TemporaryDirectory() as td:
+        tarball = os.path.join(td, version.filename)
+        _download(version.download_url, tarball)
+        _cmd_q('rm', '-rf', 'go')
+        _cmd_q('tar', '-xzf', tarball)
+    if not os.path.isfile('go/VERSION'):
+        raise SystemExit('extracted tree missing go/VERSION')
+
+
+def _validate_meta_gbp_dir() -> None:
+    for path in (
+        'changelogs/mainline',
+        'changelogs/nightly',
+        'go/VERSION',
+        'debiandirs',
+    ):
+        if not os.path.exists(path):
+            raise SystemExit(f'not a meta-gbp repo? missing ./{path}')
+
+    assert _go_minor()
+
+    mainline_dists = sorted(os.listdir('changelogs/mainline'))
+    nightly_dists = sorted(os.listdir('changelogs/nightly'))
+    assert mainline_dists == nightly_dists, (mainline_dists, nightly_dists)
+
+
+def _mainline_repo(dist: str) -> int:
+    _cmd_q('rm', '-rf', 'work')
+    os.makedirs('work', exist_ok=True)
+
+    shutil.copytree('go', 'work/go')
+    shutil.copytree(f'debiandirs/{dist}', 'work/debian')
+    shutil.copy(f'changelogs/mainline/{dist}', 'work/debian/changelog')
+    if os.path.isdir('patches') and os.listdir('patches'):
+        shutil.copytree('patches', 'work/debian/patches')
+
+    _cmd_q('git', 'init', 'work')
+    git = ('git', '-C', 'work')
+    _cmd_q(*git, 'add', '-A')
+    _cmd_q(*git, 'commit', '-q', '-m', f'meta-gbp: init for {dist}')
+
+    return 0
+
+
+def _materialize(dist: str) -> int:
+    return _mainline_repo(dist)
+
+
+def _build() -> int:
+    if not os.path.exists('work/debian/rules'):
+        raise SystemExit('not materialized?')
+
+    _cmd_q('rm', '-rf', 'dist')
+
+    return _cmd_r(BUILD, cwd='work')
+
+
+def _changelog(
+    message: str,
+    *,
+    only: str | None,
+    upstream: str | None = None,
+) -> int:
+    for dist in os.listdir('changelogs/mainline'):
+        if only is not None and dist != only:
+            continue
+        current_version = _cmd_o(
+            TOOLS, 'dpkg-parsechangelog',
+            '--file', f'changelogs/mainline/{dist}',
+            '--show-field=version',
+        ).strip()
+
+        parsed = re.fullmatch(r'^(.*)-1\+([a-z]+)([0-9]+)$', current_version)
+        if parsed is None:
+            raise SystemExit(f'unexpected version: {current_version}')
+
+        base = upstream if upstream is not None else parsed[1]
+        if parsed[2] != dist or (upstream is not None and upstream != parsed[1]):
+            new = 1
+        else:
+            new = int(parsed[3]) + 1
+
+        _cmd_q(
+            TOOLS, 'dch',
+            '--newversion', f'{base}-1+{dist}{new}',
+            '--distribution', dist,
+            '--force-distribution',
+            '--changelog', f'changelogs/mainline/{dist}',
+            message,
+        )
+
+    return 0
+
+
+def _update() -> int:
+    minor = _go_minor()
+    current = _read_current_version()
+    latest = _resolve_latest_patch(minor)
+
+    if current.version == latest and not current.extra:
+        print('already up to date!', file=sys.stderr)
+        return 0
+
+    _replace_go_tree(latest)
+    _changelog(f'Update to Go {latest}.', only=None, upstream=latest)
+    _cmd_q('git', 'add', 'go', 'changelogs')
+    _cmd_q('git', 'commit', '-m', f'update to Go {latest}')
+    return 0
+
+
+def main() -> int:
+    _validate_meta_gbp_dir()
+
+    dists = sorted(os.listdir('changelogs/mainline'))
+
+    parser = argparse.ArgumentParser()
+
+    subparsers = parser.add_subparsers(dest='command', required=True)
+
+    subparsers.add_parser('build')
+
+    changelog = subparsers.add_parser('changelog')
+    changelog.add_argument('-m', '--message', required=True)
+    changelog.add_argument('--only', choices=dists)
+
+    materialize = subparsers.add_parser('materialize')
+    materialize.add_argument('dist', choices=dists)
+
+    subparsers.add_parser('update')
+
+    args = parser.parse_args()
+
+    if args.command == 'build':
+        return _build()
+    if args.command == 'changelog':
+        return _changelog(args.message, only=args.only)
+    if args.command == 'materialize':
+        return _materialize(args.dist)
+    if args.command == 'update':
+        return _update()
+
+    raise NotImplementedError(f'{args.command=}')
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

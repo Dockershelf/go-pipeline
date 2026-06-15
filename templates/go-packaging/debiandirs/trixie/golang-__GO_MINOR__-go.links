@@ -1,0 +1,2 @@
+usr/lib/go-__GO_MINOR__/bin/go usr/bin/go
+usr/lib/go-__GO_MINOR__/bin/gofmt usr/bin/gofmt

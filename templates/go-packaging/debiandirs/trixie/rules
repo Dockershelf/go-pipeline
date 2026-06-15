@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export DEB_BUILD_OPTIONS=nostrip
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	@echo "Using precompiled Go binaries — skipping configure."
+
+override_dh_auto_build:
+	@echo "Using precompiled Go binaries — skipping build."
+
+override_dh_auto_install:
+	mkdir -p debian/golang-__GO_MINOR__-go/usr/lib/go-__GO_MINOR__
+	cp -a go/* debian/golang-__GO_MINOR__-go/usr/lib/go-__GO_MINOR__/
+
+override_dh_strip_nondeterminism:
+	@echo "Skipping strip_nondeterminism for upstream Go test fixtures."
+
+override_dh_dwz:
+	@echo "Skipping dwz for upstream Go precompiled binaries."
+
+override_dh_shlibdeps:
+	@echo "Skipping shlibdeps for upstream Go precompiled tree."
