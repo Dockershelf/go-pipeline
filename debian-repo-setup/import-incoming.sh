@@ -17,7 +17,10 @@ INCOMING="${INCOMING:-${REPO_ROOT}/incoming}"
 export GNUPGHOME="${GNUPGHOME:-${REPO_ROOT}/.gnupg}"
 
 shopt -s nullglob
-debs=("${INCOMING}"/*.deb)
+debs=("${INCOMING}"/*+"${CODENAME}"*.deb)
+if [ "${#debs[@]}" -eq 0 ]; then
+    debs=("${INCOMING}"/*.deb)
+fi
 if [ "${#debs[@]}" -eq 0 ]; then
     echo "No .deb files in ${INCOMING}"
     exit 0
