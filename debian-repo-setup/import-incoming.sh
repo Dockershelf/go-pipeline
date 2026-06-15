@@ -14,6 +14,7 @@ set -euo pipefail
 CODENAME="${1:?usage: import-incoming.sh <trixie|unstable>}"
 REPO_ROOT="${REPO_ROOT:-/var/www/debian}"
 INCOMING="${INCOMING:-${REPO_ROOT}/incoming}"
+export GNUPGHOME="${GNUPGHOME:-${REPO_ROOT}/.gnupg}"
 
 shopt -s nullglob
 debs=("${INCOMING}"/*.deb)
