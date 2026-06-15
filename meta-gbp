@@ -220,13 +220,40 @@ def _changelog(
     return 0
 
 
+def _go_tree_arch() -> str | None:
+    go_bin = os.path.join('go', 'bin', 'go')
+    if not os.path.isfile(go_bin):
+        return None
+    out = subprocess.check_output(('file', '-b', go_bin), text=True).lower()
+    if 'x86-64' in out or 'x86_64' in out:
+        return 'amd64'
+    if 'aarch64' in out or 'arm64' in out:
+        return 'arm64'
+    if 'arm' in out:
+        return 'armv6l'
+    return None
+
+
 def _update() -> int:
     minor = _go_minor()
     current = _read_current_version()
     latest = _resolve_latest_patch(minor)
+    target_arch = _go_arch()
+    tree_arch = _go_tree_arch()
+    arch_mismatch = tree_arch is not None and tree_arch != target_arch
 
-    if current.version == latest and not current.extra:
+    if current.version == latest and not current.extra and not arch_mismatch:
         print('already up to date!', file=sys.stderr)
+        return 0
+
+    if arch_mismatch and current.version == latest and not current.extra:
+        print(
+            f'refreshing go tree for {target_arch} (was {tree_arch})',
+            file=sys.stderr,
+        )
+        _replace_go_tree(latest)
+        _cmd_q('git', 'add', 'go')
+        _cmd_q('git', 'commit', '-m', f'refresh Go {latest} tree for {target_arch}')
         return 0
 
     _replace_go_tree(latest)
