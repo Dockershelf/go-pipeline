@@ -79,9 +79,9 @@ for suite in trixie unstable; do
     done
 done
 
+cd "${TARGET}"
 chmod +x debiandirs/*/rules
 
-cd "${TARGET}"
 echo "Downloading ${URL} ..."
 curl -fsSL "${URL}" -o "${TARBALL}"
 tar -xzf "${TARBALL}"
