@@ -40,7 +40,7 @@ export DOCKERSHELF_GITHUB_ORG ?= Dockershelf
 GO_VERSIONS := 1.20 1.21 1.22 1.23 1.24 1.25
 
 .PHONY: all bootstrap clone-go-repos build-tools-image generate-dockerfiles build-builder-images \
-	materialize build publish list-dists help
+	materialize build publish smoke list-dists help
 
 all: help
 
@@ -53,6 +53,7 @@ help:
 	@echo "  materialize GO=1.25 DIST=trixie"
 	@echo "  build GO=1.25             Build binary .deb packages (unsigned)"
 	@echo "  publish DIST=trixie       Rsync dist/*.deb to DO droplet + reprepro import"
+	@echo "  smoke GO=1.25 DIST=trixie  Install debs in a container and run smoke tests"
 	@echo "  list-dists                Show Debian suites per go repo"
 	@echo ""
 	@echo "Config: copy config.env.example to config.env"
@@ -135,6 +136,12 @@ build: bootstrap build-tools-image
 	@mkdir -p "$(DIST_DIR)"
 	@cd "$(WORKSPACE)/go$(GO)" && ../go-pipeline/meta-gbp build
 	@echo "Packages written to $(DIST_DIR)/"
+
+smoke:
+	@test -n "$(GO)" || (echo "GO required, e.g. make smoke GO=1.25 DIST=unstable" && exit 1)
+	@test -n "$(DIST)" || (echo "DIST required, e.g. DIST=unstable" && exit 1)
+	@bash "$(PIPELINE)/scripts/debian-smoke-test.sh" \
+		--dist "$(DIST)" --go "$(GO)" --dist-dir "$(DIST_DIR)"
 
 publish:
 	@test -n "$(DIST)" || (echo "DIST required, e.g. make publish DIST=trixie" && exit 1)

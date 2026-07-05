@@ -3,6 +3,11 @@
 Continuous integration for Dockershelf Go repackaging: builder images on GHCR, scheduled
 `meta-gbp update` / build / smoke test / APT publish across `go1.20`–`go1.25`.
 
+Multi-arch (amd64 + arm64) is supported via the `arches` dispatch input and the
+`arches-json` reusable-workflow input. arm64 jobs run on `ubuntu-24.04-arm` runners.
+`trixie` is temporarily disabled in the committed `main.yml` files (`dists-json: '["unstable"]'`);
+re-enable by restoring `'["trixie", "unstable"]'` once trixie builder images are ready.
+
 ## Workflows
 
 | Workflow | Repo | Purpose |
@@ -66,8 +71,8 @@ Full droplet + GitHub wiring: [`docs/deploy-setup.md`](deploy-setup.md).
 | `DEPLOY_USER` | `deploy` |
 | `DEPLOY_DIR` | `/var/www/debian` |
 | `DEPLOY_INCOMING` | `/var/www/debian/incoming` |
-| `DEBFULLNAME` | `Dockershelf Maintainer` |
-| `DEBEMAIL` | `maintainer@example.com` |
+| `DEBFULLNAME` | `Luis Alejandro Martínez Faneyth` |
+| `DEBEMAIL` | `luis@luisalejandro.org` |
 
 Publish jobs run only when `publish` input is true **and** `DEPLOY_HOST` is set. When deploy variables are missing, build and smoke still run and the workflow summary notes that publish was skipped.
 
@@ -89,18 +94,18 @@ Publish jobs run only when `publish` input is true **and** `DEPLOY_HOST` is set.
 
 ## Schedule (UTC)
 
-Cron is staggered after the Node window (`10:10`–`10:30` UTC):
+Packaging runs **weekly on Thursday** (2 days before Dockershelf consumer images build on **Saturday** 00:00 UTC). Cron is staggered per Go line to reduce runner overlap:
 
-| Repo | Cron |
-|------|------|
-| go1.20 | `35 10 * * *` |
-| go1.21 | `40 10 * * *` |
-| go1.22 | `45 10 * * *` |
-| go1.23 | `50 10 * * *` |
-| go1.24 | `55 10 * * *` |
-| go1.25 | `0 11 * * *` |
+| Repo | Cron | Notes |
+|------|------|-------|
+| go1.20 | `0 0 * * 4` | Thursday 00:00 |
+| go1.21 | `0 2 * * 4` | Thursday 02:00 |
+| go1.22 | `0 4 * * 4` | Thursday 04:00 |
+| go1.23 | `0 6 * * 4` | Thursday 06:00 |
+| go1.24 | `0 8 * * 4` | Thursday 08:00 |
+| go1.25 | `0 10 * * 4` | Thursday 10:00 |
 
-Scheduled runs publish when deploy variables and `DEPLOY_SSH_KEY` are configured. Use `workflow_dispatch` with `publish: false` to build and smoke-test only.
+Scheduled runs publish when deploy variables and `DEPLOY_SSH_KEY` are configured. Use `workflow_dispatch` with `publish: false` to build and smoke-test only, and `arches` (JSON array, default `["amd64"]`) to select architectures.
 
 ## Per-repo rollout
 
@@ -114,7 +119,7 @@ Scheduled runs publish when deploy variables and `DEPLOY_SSH_KEY` are configured
 
 ## Manual runs
 
-**Full pipeline (go1.25):** Actions → packaging → Run workflow.
+**Full pipeline (go1.25):** Actions → packaging → Run workflow. Set `arches` to `["amd64","arm64"]` for multi-arch, or `["amd64"]` (default) for amd64 only.
 
 **Republish existing debs:** `go-pipeline` → Actions → publish → choose suite (expects `dist/*.deb` in the runner workspace).
 
@@ -122,7 +127,7 @@ Scheduled runs publish when deploy variables and `DEPLOY_SSH_KEY` are configured
 
 ## Architecture note
 
-CI runs on `ubuntu-latest` and sets `GO_CI_ARCH=amd64` during `meta-gbp update`, so published `.deb` packages contain the official **amd64** Go toolchain. arm64 builds require a separate matrix job (future work).
+CI builds run on `ubuntu-latest` (amd64) or `ubuntu-24.04-arm` (arm64) depending on the `arches` matrix. The `update` job sets `GO_CI_ARCH` so `meta-gbp update` records the correct architecture in the packaging metadata. Published `.deb` packages contain the official Go toolchain for the target arch.
 
 ## Failure modes
 
