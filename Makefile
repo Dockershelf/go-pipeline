@@ -1,6 +1,6 @@
 # Dockershelf Go packaging pipeline (Debian-native, precompiled repackage)
 #
-# Run from go-pipeline/ inside the deadsnakes-pipeline workspace.
+# Run from go-pipeline/ inside the dockershelf-pipeline workspace.
 # Sibling go* repos live in the parent directory (..).
 #
 # Quick start:
@@ -21,6 +21,7 @@ include $(PIPELINE)/config.env
 endif
 export DOCKERSHELF_BUILDER_IMAGE ?= dockershelf-builder
 export DOCKERSHELF_TOOLS_IMAGE ?= dockershelf-builder/tools
+export DOCKERSHELF_ARCH ?= amd64
 ifdef DEBFULLNAME
 export DEBFULLNAME
 endif

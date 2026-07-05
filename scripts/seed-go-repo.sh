@@ -2,7 +2,7 @@
 # Seed a local go{minor} packaging repository from the go-pipeline template.
 #
 # Usage:
-#   ./seed-go-repo.sh 1.25 /path/to/deadsnakes-pipeline/go1.25
+#   ./seed-go-repo.sh 1.25 /path/to/dockershelf-pipeline/go1.25
 #
 # Downloads the latest official precompiled Go patch release for the given minor
 # line and initializes a git-buildpackage-ready repository.

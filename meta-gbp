@@ -126,21 +126,26 @@ def _download(url: str, dest: str) -> None:
 
 
 def _replace_go_tree(patch: str) -> None:
+    arch = _go_arch()
+    go_dir = f'go-{arch}'
     version = Version(patch, '')
     with tempfile.TemporaryDirectory() as td:
         tarball = os.path.join(td, version.filename)
         _download(version.download_url, tarball)
-        _cmd_q('rm', '-rf', 'go')
-        _cmd_q('tar', '-xzf', tarball)
-    if not os.path.isfile('go/VERSION'):
-        raise SystemExit('extracted tree missing go/VERSION')
+        _cmd_q('rm', '-rf', go_dir)
+        # Go upstream tarballs extract to a top-level go/ dir
+        _cmd_q('tar', '-xzf', tarball, '-C', td)
+        _cmd_q('mv', os.path.join(td, 'go'), go_dir)
+    if not os.path.isfile(os.path.join(go_dir, 'VERSION')):
+        raise SystemExit(f'extracted tree missing {go_dir}/VERSION')
 
 
 def _validate_meta_gbp_dir() -> None:
+    arch = _go_arch()
     for path in (
         'changelogs/mainline',
         'changelogs/nightly',
-        'go/VERSION',
+        f'go-{arch}/VERSION',
         'debiandirs',
     ):
         if not os.path.exists(path):
@@ -154,10 +159,11 @@ def _validate_meta_gbp_dir() -> None:
 
 
 def _mainline_repo(dist: str) -> int:
+    arch = _go_arch()
     _cmd_q('rm', '-rf', 'work')
     os.makedirs('work', exist_ok=True)
 
-    shutil.copytree('go', 'work/go')
+    shutil.copytree(f'go-{arch}', 'work/go')
     shutil.copytree(f'debiandirs/{dist}', 'work/debian')
     shutil.copy(f'changelogs/mainline/{dist}', 'work/debian/changelog')
     if os.path.isdir('patches') and os.listdir('patches'):
@@ -235,7 +241,8 @@ def _changelog_upstream_base() -> str:
 
 
 def _go_tree_arch() -> str | None:
-    go_bin = os.path.join('go', 'bin', 'go')
+    arch = _go_arch()
+    go_bin = os.path.join(f'go-{arch}', 'bin', 'go')
     if not os.path.isfile(go_bin):
         return None
     out = subprocess.check_output(('file', '-b', go_bin), text=True).lower()
@@ -284,13 +291,13 @@ def _update() -> int:
             only=None,
             upstream=latest if changelog_stale else None,
         )
-        _cmd_q('git', 'add', 'go', 'changelogs')
+        _cmd_q('git', 'add', f'go-{target_arch}', 'changelogs')
         _cmd_q('git', 'commit', '-m', f'refresh Go {latest} tree for {target_arch}')
         return 0
 
     _replace_go_tree(latest)
     _changelog(f'Update to Go {latest}.', only=None, upstream=latest)
-    _cmd_q('git', 'add', 'go', 'changelogs')
+    _cmd_q('git', 'add', f'go-{target_arch}', 'changelogs')
     _cmd_q('git', 'commit', '-m', f'update to Go {latest}')
     return 0
 

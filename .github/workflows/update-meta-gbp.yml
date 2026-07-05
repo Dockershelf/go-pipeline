@@ -6,6 +6,10 @@ on:
       dists-json:
         required: true
         type: string
+      arches-json:
+        required: false
+        type: string
+        default: '["amd64"]'
       publish:
         type: boolean
         default: true
@@ -19,11 +23,16 @@ permissions:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     env:
       DEBFULLNAME: ${{ vars.DEBFULLNAME || 'Dockershelf Maintainer' }}
       DEBEMAIL: ${{ vars.DEBEMAIL || '41898282+github-actions[bot]@users.noreply.github.com' }}
-      GO_CI_ARCH: amd64
+      GO_CI_ARCH: ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        arch: ${{ fromJSON(inputs.arches-json) }}
     outputs:
       rev: ${{ steps.rev.outputs.rev }}
       go: ${{ steps.rev.outputs.go }}
@@ -88,16 +97,18 @@ jobs:
 
   build:
     needs: update
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     env:
       DEBFULLNAME: ${{ vars.DEBFULLNAME || 'Dockershelf Maintainer' }}
       DEBEMAIL: ${{ vars.DEBEMAIL || '41898282+github-actions[bot]@users.noreply.github.com' }}
-      GO_CI_ARCH: amd64
+      GO_CI_ARCH: ${{ matrix.arch }}
+      DOCKERSHELF_ARCH: ${{ matrix.arch }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         dist: ${{ fromJSON(inputs.dists-json) }}
+        arch: ${{ fromJSON(inputs.arches-json) }}
     steps:
       - name: Checkout go repo
         uses: actions/checkout@v4
@@ -144,17 +155,20 @@ jobs:
       - name: Upload debs
         uses: actions/upload-artifact@v4
         with:
-          name: debs-${{ matrix.dist }}
+          name: debs-${{ matrix.dist }}-${{ matrix.arch }}
           path: go-pipeline/dist/*.deb
           if-no-files-found: error
 
   smoke:
     needs: [build, update]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    env:
+      DOCKERSHELF_ARCH: ${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:
         dist: ${{ fromJSON(inputs.dists-json) }}
+        arch: ${{ fromJSON(inputs.arches-json) }}
     steps:
       - name: Checkout go-pipeline
         uses: actions/checkout@v4
@@ -167,7 +181,7 @@ jobs:
       - name: Download debs
         uses: actions/download-artifact@v4
         with:
-          name: debs-${{ matrix.dist }}
+          name: debs-${{ matrix.dist }}-${{ matrix.arch }}
           path: dist
 
       - name: Smoke test
@@ -175,17 +189,21 @@ jobs:
           bash go-pipeline/scripts/debian-smoke-test.sh \
             --dist "${{ matrix.dist }}" \
             --go "${{ needs.update.outputs.go }}" \
-            --dist-dir dist
+            --dist-dir dist \
+            --arch "${{ matrix.arch }}"
 
   publish:
     needs: [smoke, update]
     if: inputs.publish && vars.DEPLOY_HOST != ''
     runs-on: ubuntu-latest
+    env:
+      DOCKERSHELF_ARCH: ${{ matrix.arch }}
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
         dist: ${{ fromJSON(inputs.dists-json) }}
+        arch: ${{ fromJSON(inputs.arches-json) }}
     steps:
       - name: Checkout go-pipeline
         uses: actions/checkout@v4
@@ -199,7 +217,7 @@ jobs:
       - name: Download debs
         uses: actions/download-artifact@v4
         with:
-          name: debs-${{ matrix.dist }}
+          name: debs-${{ matrix.dist }}-${{ matrix.arch }}
           path: dist
 
       - name: Deploy preflight
@@ -224,7 +242,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-          bash go-pipeline/scripts/ci-publish.sh "${{ matrix.dist }}" dist
+          bash go-pipeline/scripts/ci-publish.sh "${{ matrix.dist }}" dist "${{ matrix.arch }}"
 
   deploy-status:
     needs: [smoke, publish]

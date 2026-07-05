@@ -16,6 +16,13 @@ def main() -> NoReturn:
     deb_fullname = os.environ.get('DEBFULLNAME', name)
     deb_email = os.environ.get('DEBEMAIL', email)
 
+    # Forward arch-related env vars into the container
+    forwarded_env = []
+    for var in ('DOCKERSHELF_ARCH',):
+        val = os.environ.get(var)
+        if val:
+            forwarded_env.extend(('--env', f'{var}={val}'))
+
     cmd = (
         'docker', 'run', '--rm', interactive,
         '--env', f'GIT_AUTHOR_NAME={name}',
@@ -24,6 +31,7 @@ def main() -> NoReturn:
         '--env', f'GIT_COMMITTER_EMAIL={email}',
         '--env', f'DEBFULLNAME={deb_fullname}',
         '--env', f'DEBEMAIL={deb_email}',
+        *forwarded_env,
         *sys.argv[1:],
     )
     os.execvp(cmd[0], cmd)

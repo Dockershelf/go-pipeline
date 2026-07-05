@@ -12,6 +12,7 @@ TOOLS = os.path.join(HERE, 'tools')
 DOCKER_RUN = os.path.join(HERE, 'docker-run')
 
 BUILDER_IMAGE = os.environ.get('DOCKERSHELF_BUILDER_IMAGE', 'dockershelf-builder')
+ARCH = os.environ.get('DOCKERSHELF_ARCH', 'amd64')
 
 
 def _gpg_volumes() -> list[str]:
@@ -45,9 +46,13 @@ def main() -> NoReturn:
     dist_dir = os.path.join(HERE, 'dist')
 
     print('*' * 79)
-    print(f'Running build (results will be in {dist_dir})')
+    print(f'Running build for {ARCH} (results will be in {dist_dir})')
     print('*' * 79)
     os.makedirs(dist_dir, exist_ok=True)
+    # Filter out _all.deb on non-amd64 arches (built only on amd64 to avoid duplicates)
+    deb_filter = '-name "*.deb"'
+    if ARCH != 'amd64':
+        deb_filter = '-name "*.deb" ! -name "*_all.deb"'
     prog = (
         f'apt-get update -qq && '
         f'mk-build-deps --install --remove --tool "apt-get --yes" /code/debian/control && '
@@ -55,11 +60,12 @@ def main() -> NoReturn:
         f'cp -a /code/go /code/debian /tmp/build/ && '
         f'cd /tmp/build && '
         f'dpkg-buildpackage -us -uc -b && '
-        f'find .. -maxdepth 1 -type f \\( -name "*.deb" -o -name "*.changes" \\) '
+        f'find .. -maxdepth 1 -type f \\( {deb_filter} -o -name "*.changes" \\) '
         f'-exec cp {{}} /dist/ \\;'
     )
     cmd = (
         DOCKER_RUN,
+        '--platform', f'linux/{ARCH}',
         *_gpg_volumes(),
         '-v', f'{pwd}:/code:ro',
         '-v', f'{dist_dir}:/dist:rw',

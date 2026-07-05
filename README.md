@@ -9,7 +9,7 @@ Mirrors [python-pipeline](../python-pipeline/) and [node-pipeline](../node-pipel
 Clone this repo as a sibling of the `go*` packaging repos:
 
 ```text
-deadsnakes-pipeline/
+dockershelf-pipeline/
 ├── go-pipeline/     # this repo
 ├── go1.20/
 ├── go1.21/
