@@ -2,11 +2,17 @@ Source: golang-__GO_MINOR__
 Section: golang
 Priority: optional
 Maintainer: Luis Alejandro Martínez Faneyth <luis@luisalejandro.org>
-Build-Depends: debhelper-compat (= 13)
+Build-Depends: debhelper-compat (= 13),
+               golang-any,
+               gcc,
+               libc6-dev,
+               git-buildpackage,
+               pristine-tar,
+               quilt
 Standards-Version: 4.7.0
 Homepage: https://go.dev
-Vcs-Browser: https://github.com/Dockershelf/go__GO_MINOR_DIR__
-Vcs-Git: https://github.com/Dockershelf/go__GO_MINOR_DIR__.git
+Vcs-Browser: https://github.com/Dockershelf/__GO_MINOR_DIR__
+Vcs-Git: https://github.com/Dockershelf/__GO_MINOR_DIR__.git
 
 Package: golang-__GO_MINOR__-go
 Architecture: any
@@ -16,6 +22,6 @@ Conflicts: golang-go
 Replaces: golang-go
 Provides: golang-go,
          golang-__GO_MINOR__-go
-Description: Go programming language compiler — __GO_MINOR__ (official precompiled)
- Dockershelf repackage of the official precompiled Go toolchain from go.dev.
+Description: Go programming language compiler — __GO_MINOR__ (compiled from source)
+ Dockershelf build of the Go toolchain from the official golang/go source tree.
  Installs to /usr/lib/go-__GO_MINOR__ with /usr/bin/go and /usr/bin/gofmt symlinks.

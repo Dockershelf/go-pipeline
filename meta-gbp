@@ -144,7 +144,6 @@ def _validate_meta_gbp_dir() -> None:
     arch = _go_arch()
     for path in (
         'changelogs/mainline',
-        'changelogs/nightly',
         f'go-{arch}/VERSION',
         'debiandirs',
     ):
@@ -154,8 +153,7 @@ def _validate_meta_gbp_dir() -> None:
     assert _go_minor()
 
     mainline_dists = sorted(os.listdir('changelogs/mainline'))
-    nightly_dists = sorted(os.listdir('changelogs/nightly'))
-    assert mainline_dists == nightly_dists, (mainline_dists, nightly_dists)
+    assert mainline_dists
 
 
 def _mainline_repo(dist: str) -> int:

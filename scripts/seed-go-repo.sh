@@ -71,12 +71,10 @@ while IFS= read -r -d '' path; do
 done < <(find "${TARGET}" -name '*__GO_MINOR*' -print0)
 
 for suite in trixie unstable; do
-    for track in mainline nightly; do
-        changelog="${TARGET}/changelogs/${track}/${suite}"
-        if [ -f "${changelog}" ]; then
-            perl -pi -e "s/__GO_MINOR__\\.0\\.0/${PATCH}/g" "${changelog}"
-        fi
-    done
+    changelog="${TARGET}/changelogs/mainline/${suite}"
+    if [ -f "${changelog}" ]; then
+        perl -pi -e "s/__GO_MINOR__\\.0\\.0/${PATCH}/g" "${changelog}"
+    fi
 done
 
 cd "${TARGET}"
