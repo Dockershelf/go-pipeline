@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""meta-gbp: manages mainline releases for Dockershelf Go repackaging."""
+"""meta-gbp: manages mainline releases for Dockershelf Go packaging.
+
+Follows the python-pipeline / node-pipeline submodule pattern:
+  - go/ is a git submodule pointing to golang/go (release-branch.go1.X)
+  - `update` fetches upstream, finds the latest go1.X.Y tag, checks it out
+    in the submodule, updates changelogs, and commits the new pointer
+  - `materialize` creates a work/ tree with the Go source + debian/ packaging
+  - `build` runs gbp buildpackage inside the Docker builder container
+"""
 from __future__ import annotations
 
 import argparse
 import functools
 import os
 import os.path
-import platform
 import re
 import shlex
 import shutil
@@ -16,7 +23,9 @@ import tempfile
 from typing import NamedTuple
 
 _DIRNAME_PAT = re.compile(r'^go(\d+\.\d+)$')
-VERSION_LINE_RE = re.compile(r'^go(\d+\.\d+\.\d+)((?:rc|beta)\d+)?')
+UPSTREAM_TAG_PREFIX = 'dockershelf/v'
+
+VERSION_RE = re.compile(r'^go(\d+\.\d+\.\d+)((?:rc|beta)\d+)?(.*)$')
 CHANGELOG_VERSION_RE = re.compile(r'^(.*)-1\+')
 
 HERE = os.path.abspath(os.path.dirname(__file__))
@@ -34,20 +43,6 @@ def _go_minor() -> str:
     return match[1]
 
 
-def _go_arch() -> str:
-    override = os.environ.get('GO_CI_ARCH', '').strip()
-    if override:
-        return override
-    machine = platform.machine().lower()
-    if machine in ('x86_64', 'amd64'):
-        return 'amd64'
-    if machine in ('aarch64', 'arm64'):
-        return 'arm64'
-    if machine in ('armv7l', 'armv6l'):
-        return 'armv6l'
-    raise SystemExit(f'unsupported architecture: {machine}')
-
-
 class Version(NamedTuple):
     version: str
     extra: str
@@ -63,20 +58,30 @@ class Version(NamedTuple):
 
     @property
     def filename(self) -> str:
-        return f'go{self.debian_version}.linux-{_go_arch()}.tar.gz'
+        return f'go{self.debian_version}.src.tar.gz'
 
     @property
     def download_url(self) -> str:
         return f'https://go.dev/dl/{self.filename}'
 
+    @classmethod
+    def parse(cls, s: str) -> Version:
+        match = VERSION_RE.fullmatch(s)
+        if not match or _is_dev_snapshot(match):
+            raise ValueError(
+                f'expected a release tag (e.g. go1.22.5), got {s}; '
+                'checkout go at an upstream release tag'
+            )
+        return cls(match[1], match[2])
 
-def _read_current_version() -> Version:
-    with open('go/VERSION', encoding='utf-8') as fh:
-        line = fh.readline().strip()
-    match = VERSION_LINE_RE.match(line)
-    if match is None:
-        raise SystemExit(f'Unexpected go/VERSION line: {line}')
-    return Version(match[1], match[2] or '')
+
+def _is_prerelease(v_match: re.Match[str]) -> bool:
+    return bool(v_match[2])
+
+
+def _is_dev_snapshot(v_match: re.Match[str]) -> bool:
+    """True when describe is past a tag (e.g. go1.22.5-41-gabc123)."""
+    return bool(v_match[3])
 
 
 def _p_cmd(cmd: tuple[str, ...], cwd: str | None) -> None:
@@ -104,9 +109,100 @@ def _cmd_o(*cmd: str, cwd: str | None = None) -> str:
     return ret.stdout
 
 
-def _cmd_r(*cmd: str, cwd: str | None = None) -> int:
+def _cmd_r(*cmd: str, cwd: str | None) -> int:
     _p_cmd(cmd, cwd)
     return subprocess.call(cmd, cwd=cwd)
+
+
+def _validate_meta_gbp_dir() -> None:
+    for path in (
+        'changelogs/mainline',
+        'debiandirs',
+        'patches',
+    ):
+        if not os.path.exists(path):
+            raise SystemExit(f'not a meta-gbp repo? missing ./{path}')
+
+    assert _go_minor()
+
+
+def _likely_go_clone(d: str) -> bool:
+    return os.path.isdir(d) and os.path.exists(os.path.join(d, 'src', 'make.bash'))
+
+
+def _potential_go_clone() -> str | None:
+    if _likely_go_clone('../../go'):
+        return '../../go'
+
+    for dname in os.listdir('..'):
+        if dname.startswith('go') and dname[2:].replace('.', '').isdigit():
+            dname = os.path.abspath(os.path.join('..', dname, 'go'))
+            if _likely_go_clone(dname):
+                return dname
+
+    return None
+
+
+def _reference_args() -> tuple[str, ...]:
+    go_dir = _potential_go_clone()
+    if go_dir is not None:
+        return ('--reference', go_dir, '--dissociate')
+    else:
+        return ()
+
+
+def _ensure_submodule_available(*, required: bool = False) -> None:
+    if _likely_go_clone('go'):
+        return
+    if not required:
+        return
+    if not os.path.exists('.gitmodules'):
+        raise SystemExit('go submodule required; run init-go-submodules.sh')
+    _cmd_q('git', 'submodule', 'update', '--init', *_reference_args())
+    if _cmd_r('git', 'diff', '--quiet', '--no-ext-diff', 'go'):
+        _cmd_q('git', 'submodule', 'update', '--init')
+
+
+def _current_tag() -> re.Match[str]:
+    git = ('git', '-C', 'go')
+    tag_cmd = (*git, 'describe', '--abbrev=10', '--tags', '--match', 'go*')
+    tag = _cmd_o(*tag_cmd).rstrip()
+    match = VERSION_RE.fullmatch(tag)
+    if match is None:
+        raise SystemExit(f'Unexpected tag: {tag}')
+
+    minor = _go_minor()
+    if not match[1].startswith(f'{minor}.'):
+        raise SystemExit(
+            f'go submodule is at {match[1]} but repo is go{minor}; '
+            f'checkout release-branch.go{minor} in the go/ submodule'
+        )
+
+    return match
+
+
+def _current_tag_from_changelog(dist: str | None = None) -> re.Match[str]:
+    if dist is None:
+        dist = sorted(os.listdir('changelogs/mainline'))[0]
+    version = _cmd_o(
+        TOOLS, 'dpkg-parsechangelog',
+        '--file', f'changelogs/mainline/{dist}',
+        '--show-field=version',
+    ).strip()
+    parsed = re.fullmatch(
+        r'^(\d+\.\d+\.\d+)((?:~(?:rc|beta)\d+)?)-\d+(?:\+[a-z0-9.~-]+)?$',
+        version,
+    )
+    if parsed is None:
+        raise SystemExit(f'unexpected changelog version: {version}')
+    extra = parsed.group(2).lstrip('~') if parsed.group(2) else ''
+    tag = f'go{parsed.group(1)}'
+    if extra:
+        tag = f'go{parsed.group(1)}{extra}'
+    match = VERSION_RE.fullmatch(tag)
+    if match is None:
+        raise SystemExit(f'Unexpected tag from changelog: {tag}')
+    return match
 
 
 def _resolve_latest_patch(minor: str) -> str:
@@ -116,60 +212,42 @@ def _resolve_latest_patch(minor: str) -> str:
     ).strip()
 
 
-def _download(url: str, dest: str) -> None:
-    if shutil.which('curl'):
-        _cmd_q('curl', '-fsSL', url, '-o', dest)
-    elif shutil.which('wget'):
-        _cmd_q('wget', '--quiet', '--output-document', dest, url)
-    else:
-        raise SystemExit('curl or wget required to download upstream Go tarball')
-
-
-def _replace_go_tree(patch: str) -> None:
-    arch = _go_arch()
-    go_dir = f'go-{arch}'
-    version = Version(patch, '')
-    with tempfile.TemporaryDirectory() as td:
-        tarball = os.path.join(td, version.filename)
-        _download(version.download_url, tarball)
-        _cmd_q('rm', '-rf', go_dir)
-        # Go upstream tarballs extract to a top-level go/ dir
-        _cmd_q('tar', '-xzf', tarball, '-C', td)
-        _cmd_q('mv', os.path.join(td, 'go'), go_dir)
-    if not os.path.isfile(os.path.join(go_dir, 'VERSION')):
-        raise SystemExit(f'extracted tree missing {go_dir}/VERSION')
-
-
-def _validate_meta_gbp_dir() -> None:
-    arch = _go_arch()
-    for path in (
-        'changelogs/mainline',
-        f'go-{arch}/VERSION',
-        'debiandirs',
-    ):
-        if not os.path.exists(path):
-            raise SystemExit(f'not a meta-gbp repo? missing ./{path}')
-
-    assert _go_minor()
-
-    mainline_dists = sorted(os.listdir('changelogs/mainline'))
-    assert mainline_dists
-
-
 def _mainline_repo(dist: str) -> int:
-    arch = _go_arch()
     _cmd_q('rm', '-rf', 'work')
-    os.makedirs('work', exist_ok=True)
 
-    shutil.copytree(f'go-{arch}', 'work/go')
+    _cmd_q('git', 'init', 'work')
+
+    v_match = _current_tag()
+    version = Version(v_match[1], v_match[2] or '')
+
+    with tempfile.TemporaryDirectory() as td:
+        dest = os.path.join(td, version.filename)
+        _cmd_q(
+            'curl', '-fsSL', version.download_url, '-o', dest,
+        )
+
+        _cmd_q(
+            TOOLS,
+            '--volume', f'{dest}:{dest}:ro',
+            'gbp', 'import-orig', dest,
+            '--pristine-tar',
+            '--upstream-branch', 'upstream',
+            '--no-interactive',
+            '--no-symlink-orig',
+            '--no-merge',
+            cwd='work',
+        )
+
+    git = ('git', '-C', 'work')
+
+    _cmd_q(*git, 'checkout', 'upstream', '-b', f'debian/{dist}')
+
     shutil.copytree(f'debiandirs/{dist}', 'work/debian')
     shutil.copy(f'changelogs/mainline/{dist}', 'work/debian/changelog')
     if os.path.isdir('patches') and os.listdir('patches'):
         shutil.copytree('patches', 'work/debian/patches')
 
-    _cmd_q('git', 'init', 'work')
-    git = ('git', '-C', 'work')
-    _cmd_q(*git, 'add', '-A')
+    _cmd_q(*git, 'add', 'debian')
     _cmd_q(*git, 'commit', '-q', '-m', f'meta-gbp: init for {dist}')
 
     return 0
@@ -179,21 +257,134 @@ def _materialize(dist: str) -> int:
     return _mainline_repo(dist)
 
 
-def _build() -> int:
-    if not os.path.exists('work/debian/rules'):
-        raise SystemExit('not materialized?')
+def _patch_queue_worktree() -> int:
+    """Minimal debian/ tree for gbp pq during meta-gbp update."""
+    _cmd_q('rm', '-rf', 'work')
+    _cmd_q('git', 'clone', 'go', 'work')
 
-    _cmd_q('rm', '-rf', 'dist')
+    git = ('git', '-C', 'work')
 
-    return _cmd_r(BUILD, cwd='work')
+    _cmd_q(*git, 'branch', 'upstream')
+
+    v_match = _current_tag()
+    if _is_prerelease(v_match):
+        new_tag = f'{UPSTREAM_TAG_PREFIX}{v_match[1]}_{v_match[2]}{v_match[3]}'
+    else:
+        new_tag = f'{UPSTREAM_TAG_PREFIX}{v_match[1]}{v_match[3]}'
+    _cmd_q(*git, 'tag', new_tag)
+
+    _cmd_q(*git, 'checkout', '-b', 'debian/unknown')
+
+    os.makedirs('work/debian')
+    open('work/debian/control', 'a+').close()
+    if os.path.isdir('patches') and os.listdir('patches'):
+        shutil.copytree('patches', 'work/debian/patches')
+
+    _cmd_q(*git, 'add', 'debian')
+    _cmd_q(*git, 'commit', '-q', '-m', 'meta-gbp: init')
+
+    return 0
 
 
-def _changelog(
-    message: str,
-    *,
-    only: str | None,
-    upstream: str | None = None,
-) -> int:
+def _update_target() -> str:
+    git = ('git', '-C', 'go')
+    minor = _go_minor()
+    branch = f'release-branch.go{minor}'
+
+    fetch = (*git, 'fetch', 'origin')
+
+    try:
+        _cmd_q(*fetch, f'refs/heads/{branch}:refs/heads/go-upstream')
+    except SystemExit:
+        try:
+            _cmd_q(*fetch, f'refs/tags/{branch}:refs/tags/{branch}')
+            _cmd_q(*git, 'update-ref', 'refs/heads/go-upstream', f'{branch}~0')
+            _cmd_q(*git, 'tag', '--delete', branch)
+        except SystemExit:
+            _cmd_q(*fetch, 'refs/heads/master:refs/heads/go-upstream')
+
+    current = _cmd_o(*git, 'rev-parse', 'HEAD').strip()
+
+    log_output = _cmd_o(
+        *git, 'log',
+        '--reverse',
+        '--decorate-refs=refs/tags/',
+        '--format=%H',
+        '--simplify-by-decoration',
+        'HEAD..go-upstream',
+    )
+    for line in log_output.splitlines():
+        if line == current:
+            continue
+        return line
+
+    return _cmd_o(*git, 'rev-parse', 'go-upstream').strip()
+
+
+def _update(*, rev: str | None, interactive: bool) -> int:
+    if rev is None:
+        rev = _update_target()
+
+    current_rev = _cmd_o('git', '-C', 'go', 'rev-parse', 'HEAD').strip()
+    if current_rev == rev:
+        print('already up to date!', file=sys.stderr)
+        return 0
+
+    _patch_queue_worktree()
+
+    git_work = ('git', '-C', 'work')
+
+    if os.path.isdir('patches') and os.listdir('patches'):
+        _cmd_q(TOOLS, 'gbp', 'pq', 'import', cwd='work')
+        _cmd_q(*git_work, 'checkout', '-')
+
+    _cmd_q(*git_work, 'merge', rev)
+
+    if os.path.isdir('patches') and os.listdir('patches') and _cmd_r(TOOLS, 'gbp', 'pq', 'rebase', cwd='work'):
+        if not interactive:
+            return 1
+
+        print('*' * 79)
+        print('Did not rebase cleanly!')
+        print('- to cancel: `git rebase --abort` and `exit 1`')
+        print('- to continue: resolve the rebase conflicts and `exit 0`')
+        print('*' * 79)
+        ret = _cmd_r(os.environ.get('SHELL', 'bash'), cwd='work')
+        if ret:
+            return ret
+
+    if os.path.isdir('patches') and os.listdir('patches'):
+        _cmd_q(TOOLS, 'gbp', 'pq', 'export', cwd='work')
+        _cmd_q('rm', '-rf', 'patches')
+        shutil.copytree('work/debian/patches', 'patches')
+
+    _cmd_q('git', '-C', 'go', 'checkout', rev)
+
+    v_match = _current_tag()
+
+    for dist in os.listdir('changelogs/mainline'):
+        if _is_prerelease(v_match):
+            debian_version = f'{v_match[1]}~{v_match[2]}{v_match[3]}-1+{dist}1'
+        else:
+            debian_version = f'{v_match[1]}{v_match[3]}-1+{dist}1'
+        _cmd_q(
+            TOOLS, 'dch',
+            '--newversion', debian_version,
+            '--distribution', dist,
+            '--force-distribution',
+            '--changelog', f'changelogs/mainline/{dist}',
+            f'Update to {v_match[0]}.',
+        )
+
+    _cmd_q('git', 'add', 'changelogs', 'go')
+    if os.path.isdir('patches'):
+        _cmd_q('git', 'add', 'patches')
+    _cmd_q('git', 'commit', '-m', f'update to {rev} (mainline)')
+
+    return 0
+
+
+def _changelog(message: str, *, only: str | None) -> int:
     for dist in os.listdir('changelogs/mainline'):
         if only is not None and dist != only:
             continue
@@ -207,15 +398,14 @@ def _changelog(
         if parsed is None:
             raise SystemExit(f'unexpected version: {current_version}')
 
-        base = upstream if upstream is not None else parsed[1]
-        if parsed[2] != dist or (upstream is not None and upstream != parsed[1]):
+        if parsed[2] != dist:
             new = 1
         else:
             new = int(parsed[3]) + 1
 
         _cmd_q(
             TOOLS, 'dch',
-            '--newversion', f'{base}-1+{dist}{new}',
+            '--newversion', f'{parsed[1]}-1+{dist}{new}',
             '--distribution', dist,
             '--force-distribution',
             '--changelog', f'changelogs/mainline/{dist}',
@@ -225,79 +415,13 @@ def _changelog(
     return 0
 
 
-def _changelog_upstream_base() -> str:
-    dist = sorted(os.listdir('changelogs/mainline'))[0]
-    version = _cmd_o(
-        TOOLS, 'dpkg-parsechangelog',
-        '--file', f'changelogs/mainline/{dist}',
-        '--show-field=version',
-    ).strip()
-    match = CHANGELOG_VERSION_RE.match(version)
-    if match is None:
-        raise SystemExit(f'unexpected changelog version: {version}')
-    return match[1]
+def _build() -> int:
+    if not os.path.exists('work/debian/rules'):
+        raise SystemExit('not materialized?')
 
+    _cmd_q('rm', '-rf', 'dist')
 
-def _go_tree_arch() -> str | None:
-    arch = _go_arch()
-    go_bin = os.path.join(f'go-{arch}', 'bin', 'go')
-    if not os.path.isfile(go_bin):
-        return None
-    out = subprocess.check_output(('file', '-b', go_bin), text=True).lower()
-    if 'x86-64' in out or 'x86_64' in out:
-        return 'amd64'
-    if 'aarch64' in out or 'arm64' in out:
-        return 'arm64'
-    if 'arm' in out:
-        return 'armv6l'
-    return None
-
-
-def _update() -> int:
-    minor = _go_minor()
-    current = _read_current_version()
-    latest = _resolve_latest_patch(minor)
-    target_arch = _go_arch()
-    tree_arch = _go_tree_arch()
-    arch_mismatch = tree_arch is not None and tree_arch != target_arch
-    changelog_stale = _changelog_upstream_base() != latest
-
-    if (
-        current.version == latest
-        and not current.extra
-        and not arch_mismatch
-        and not changelog_stale
-    ):
-        print('already up to date!', file=sys.stderr)
-        return 0
-
-    if current.version == latest and not current.extra and not arch_mismatch:
-        _changelog(f'Update to Go {latest}.', only=None, upstream=latest)
-        _cmd_q('git', 'add', 'changelogs')
-        _cmd_q('git', 'commit', '-m', f'sync changelog to Go {latest}')
-        return 0
-
-    if arch_mismatch and current.version == latest and not current.extra:
-        print(
-            f'refreshing go tree for {target_arch} (was {tree_arch})',
-            file=sys.stderr,
-        )
-        _replace_go_tree(latest)
-        message = f'Refresh Go {latest} tree for {target_arch}.'
-        _changelog(
-            message,
-            only=None,
-            upstream=latest if changelog_stale else None,
-        )
-        _cmd_q('git', 'add', f'go-{target_arch}', 'changelogs')
-        _cmd_q('git', 'commit', '-m', f'refresh Go {latest} tree for {target_arch}')
-        return 0
-
-    _replace_go_tree(latest)
-    _changelog(f'Update to Go {latest}.', only=None, upstream=latest)
-    _cmd_q('git', 'add', f'go-{target_arch}', 'changelogs')
-    _cmd_q('git', 'commit', '-m', f'update to Go {latest}')
-    return 0
+    return _cmd_r(BUILD, cwd='work')
 
 
 def main() -> int:
@@ -318,9 +442,21 @@ def main() -> int:
     materialize = subparsers.add_parser('materialize')
     materialize.add_argument('dist', choices=dists)
 
-    subparsers.add_parser('update')
+    update = subparsers.add_parser('update')
+    update.add_argument('--rev')
+    update.add_argument(
+        '--no-interactive',
+        dest='interactive',
+        action='store_false',
+    )
 
     args = parser.parse_args()
+
+    if args.command == 'update':
+        _ensure_submodule_available(required=True)
+        return _update(rev=args.rev, interactive=args.interactive)
+
+    _ensure_submodule_available()
 
     if args.command == 'build':
         return _build()
@@ -328,8 +464,6 @@ def main() -> int:
         return _changelog(args.message, only=args.only)
     if args.command == 'materialize':
         return _materialize(args.dist)
-    if args.command == 'update':
-        return _update()
 
     raise NotImplementedError(f'{args.command=}')
 

@@ -28,10 +28,13 @@ for f in meta-gbp build docker-run tools; do
     fi
 done
 
-if [[ ! -f "$GO_REPO_DIR/go/VERSION" ]]; then
-    echo "missing $GO_REPO_DIR/go/VERSION" >&2
+if [[ ! -f "$GO_REPO_DIR/.gitmodules" ]]; then
+    echo "missing $GO_REPO_DIR/.gitmodules" >&2
     exit 1
 fi
+
+git -C "$GO_REPO_DIR" submodule update --init go
+git -C "$GO_REPO_DIR/go" fetch --tags origin
 
 export GO_REPO_DIR
 export PIPELINE_DIR

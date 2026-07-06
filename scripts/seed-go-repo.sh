@@ -4,8 +4,11 @@
 # Usage:
 #   ./seed-go-repo.sh 1.25 /path/to/dockershelf-pipeline/go1.25
 #
-# Downloads the latest official precompiled Go patch release for the given minor
-# line and initializes a git-buildpackage-ready repository.
+# The upstream `go/` submodule gitlink is registered pointing to the
+# release-branch.go{minor} branch HEAD, but the working tree is not cloned
+# here (too large for bootstrap). Initialize it later with
+# ../init-go-submodules.sh or:
+#   git submodule update --init go
 
 set -euo pipefail
 
@@ -19,26 +22,6 @@ if [ -e "${TARGET}" ]; then
     exit 1
 fi
 
-go_arch() {
-    case "$(uname -m)" in
-        x86_64) echo amd64 ;;
-        aarch64|arm64) echo arm64 ;;
-        armv7l) echo armv6l ;;
-        *)
-            echo "ERROR: unsupported architecture: $(uname -m)" >&2
-            exit 1
-            ;;
-    esac
-}
-
-resolve_latest_patch() {
-    python3 "${PIPELINE}/scripts/resolve-go-patch.py" "${MINOR}"
-}
-
-ARCH="$(go_arch)"
-PATCH="$(resolve_latest_patch "${MINOR}")"
-TARBALL="go${PATCH}.linux-${ARCH}.tar.gz"
-URL="https://go.dev/dl/${TARBALL}"
 MINOR_DIR="go${MINOR}"
 
 packaging_cron() {
@@ -70,28 +53,20 @@ while IFS= read -r -d '' path; do
     fi
 done < <(find "${TARGET}" -name '*__GO_MINOR*' -print0)
 
-for suite in trixie unstable; do
-    changelog="${TARGET}/changelogs/mainline/${suite}"
-    if [ -f "${changelog}" ]; then
-        perl -pi -e "s/__GO_MINOR__\\.0\\.0/${PATCH}/g" "${changelog}"
-    fi
-done
-
 cd "${TARGET}"
+git init -b main
 chmod +x debiandirs/*/rules
 
-echo "Downloading ${URL} ..."
-curl -fsSL "${URL}" -o "${TARBALL}"
-tar -xzf "${TARBALL}"
-rm -f "${TARBALL}"
+# Register go/ as a proper 160000 gitlink pointing to the
+# release-branch.go${MINOR} branch HEAD, matching the python-pipeline
+# cpython/ and node-pipeline node/ submodule patterns.
+# The working tree is populated later by init-go-submodules.sh or:
+#   git submodule update --init go
+GO_SHA="$(curl -fsSL "https://api.github.com/repos/golang/go/branches/release-branch.go${MINOR}" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['commit']['sha'])")"
+rm -rf go
+git update-index --add --cacheinfo 160000 "${GO_SHA}" go
+git add .gitmodules
+git commit -m "Initial go${MINOR} Debian packaging repository"
 
-if [ ! -f go/VERSION ]; then
-    echo "ERROR: extracted tree missing go/VERSION"
-    exit 1
-fi
-
-git init -b main
-git add -A
-git commit -m "Initial go${MINOR} Debian repackaging repository (Go ${PATCH})"
-
-echo "Seeded ${TARGET} with Go ${PATCH} (${ARCH})"
+echo "Seeded ${TARGET} (run init-go-submodules.sh to fetch upstream go)"

@@ -1,4 +1,4 @@
-# Dockershelf Go packaging pipeline (Debian-native, precompiled repackage)
+# Dockershelf Go packaging pipeline (Debian-native, source compilation)
 #
 # Run from go-pipeline/ inside the dockershelf-pipeline workspace.
 # Sibling go* repos live in the parent directory (..).
