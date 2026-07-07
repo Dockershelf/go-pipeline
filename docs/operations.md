@@ -59,8 +59,8 @@ Requires the `DEPLOY_*` variables in `config.env` (or org-level GitHub variables
 After publishing, register the repository and install:
 
 ```bash
-curl -fsSL https://apt.luisalejandro.org/dockershelf/dists/trixie/Release.gpg | gpg --dearmor -o /usr/share/keyrings/dockershelf.gpg
-echo "deb [signed-by=/usr/share/keyrings/dockershelf.gpg] https://apt.luisalejandro.org/dockershelf trixie main" > /etc/apt/sources.list.d/dockershelf.list
+curl -fsSL https://apt.dockershelf.com/dockershelf/dists/trixie/Release.gpg | gpg --dearmor -o /usr/share/keyrings/dockershelf.gpg
+echo "deb [signed-by=/usr/share/keyrings/dockershelf.gpg] https://apt.dockershelf.com/dockershelf trixie main" > /etc/apt/sources.list.d/dockershelf.list
 apt-get update
 apt-get install golang-1.25-go
 go version

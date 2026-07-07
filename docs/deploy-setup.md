@@ -3,7 +3,7 @@
 Go packages publish to the **same** DigitalOcean APT droplet and repository tree as Python and Node packages.
 Org-level `DEPLOY_*` variables and `DEPLOY_SSH_KEY` configured for [python-pipeline](../python-pipeline/docs/deploy-setup.md) apply here without duplication.
 
-Public repository URL: **`https://apt.luisalejandro.org/dockershelf/`**
+Public repository URL: **`https://apt.dockershelf.com/dockershelf/`**
 
 ## Architecture
 
@@ -20,7 +20,7 @@ go1.XX workflow  →  update-meta-gbp.yml  →  build  →  smoke  →  publish
 
 | Item | Notes |
 |------|-------|
-| Droplet host | `apt.luisalejandro.org` |
+| Droplet host | `apt.dockershelf.com` |
 | Repository root | `/var/www/debian` |
 | Incoming directory | `/var/www/debian/incoming` |
 | Nginx path | `/dockershelf/` → `/var/www/debian/` |
@@ -48,7 +48,7 @@ Run `./scripts/ci-check-config.sh --strict` from `go-pipeline/` to verify config
 ## Client apt line
 
 ```text
-deb [signed-by=/usr/share/keyrings/dockershelf.gpg] https://apt.luisalejandro.org/dockershelf trixie main
+deb [signed-by=/usr/share/keyrings/dockershelf.gpg] https://apt.dockershelf.com/dockershelf trixie main
 ```
 
 Install Go:
