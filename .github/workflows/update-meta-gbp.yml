@@ -23,16 +23,10 @@ permissions:
 
 jobs:
   update:
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     env:
       DEBFULLNAME: ${{ vars.DEBFULLNAME || 'Luis Alejandro Martínez Faneyth' }}
       DEBEMAIL: ${{ vars.DEBEMAIL || 'luis@luisalejandro.org' }}
-      GO_CI_ARCH: ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        arch: ${{ fromJSON(inputs.arches-json) }}
     outputs:
       rev: ${{ steps.rev.outputs.rev }}
       go: ${{ steps.rev.outputs.go }}
@@ -74,7 +68,7 @@ jobs:
         run: bash go-pipeline/scripts/ci-pull-builder-images.sh
 
       - name: meta-gbp update
-        run: go-pipeline/meta-gbp update
+        run: go-pipeline/meta-gbp update --no-interactive
 
       - name: Export revision
         id: rev

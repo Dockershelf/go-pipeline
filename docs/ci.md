@@ -16,8 +16,7 @@ re-enable by restoring `'["trixie", "unstable"]'` once trixie builder images are
 | [`update-meta-gbp.yml`](../.github/workflows/update-meta-gbp.yml) | `go-pipeline` | Reusable: update → build → smoke → publish |
 | [`pr.yml`](../.github/workflows/pr.yml) | `go-pipeline` | `pre-commit` on pull requests |
 | [`publish.yml`](../.github/workflows/publish.yml) | `go-pipeline` | Manual republish of local `dist/` to APT |
-| [`deploy-connectivity.yml`](../.github/workflows/deploy-connectivity.yml) | `go-pipeline` | Manual SSH/incoming-dir check (no rsync) |
-| [`main.yml`](../templates/go-packaging/.github/workflows/main.yml) | each `go1.XX` | Daily schedule + dispatch → calls reusable workflow |
+| [`main.yml`](../templates/go-packaging/.github/workflows/main.yml) | each `go1.XX` | Weekly schedule + dispatch → calls reusable workflow |
 
 ## CI workspace layout
 

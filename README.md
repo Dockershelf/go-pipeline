@@ -48,7 +48,7 @@ make generate-dockerfiles
 make build-builder-images
 ```
 
-Builder images are tagged `dockershelf-builder/<suite>` (e.g. `dockershelf-builder/trixie`).
+Builder images are tagged `ghcr.io/dockershelf/dockershelf-go-builder/<suite>` (e.g. `ghcr.io/dockershelf/dockershelf-go-builder/trixie`).
 
 Because Go is repackaged from official precompiled tarballs, builder images only need `debhelper` — no compiler toolchain.
 

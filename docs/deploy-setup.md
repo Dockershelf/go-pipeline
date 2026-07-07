@@ -1,7 +1,7 @@
 # APT deploy setup (Go pipeline)
 
 Go packages publish to the **same** DigitalOcean APT droplet and repository tree as Python and Node packages.
-Org-level `DEPLOY_*` variables and `DEPLOY_SSH_KEY` configured for [python-pipeline](../../python-pipeline/docs/deploy-setup.md) apply here without duplication.
+Org-level `DEPLOY_*` variables and `DEPLOY_SSH_KEY` configured for [python-pipeline](../python-pipeline/docs/deploy-setup.md) apply here without duplication.
 
 Public repository URL: **`https://apt.luisalejandro.org/dockershelf/`**
 
@@ -15,8 +15,6 @@ go1.XX workflow  →  update-meta-gbp.yml  →  build  →  smoke  →  publish
                                                                                     │
                                                                               nginx /dockershelf/
 ```
-
-Use [`deploy-connectivity.yml`](../.github/workflows/deploy-connectivity.yml) to verify SSH and paths without publishing packages.
 
 ## What is shared with Python and Node
 

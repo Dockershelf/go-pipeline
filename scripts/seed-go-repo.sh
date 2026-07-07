@@ -24,20 +24,16 @@ fi
 
 MINOR_DIR="go${MINOR}"
 
+# Auto-stagger the packaging cron schedule so each go minor line runs at a
+# different minute, avoiding all lines hitting GH Actions at once. Schedule
+# at 10:00 UTC, offset by (minor_index * 5) minutes, wrapping within the hour.
+MINOR_INDEX="$(echo "$MINOR" | awk -F. '{print $2}')"
+CRON_MINUTE=$(( (MINOR_INDEX * 5) % 60 ))
 packaging_cron() {
-    case "$MINOR" in
-        1.20) echo '35 10 * * *' ;;
-        1.21) echo '40 10 * * *' ;;
-        1.22) echo '45 10 * * *' ;;
-        1.23) echo '50 10 * * *' ;;
-        1.24) echo '55 10 * * *' ;;
-        1.25) echo '0 11 * * *' ;;
-        *) echo '5 11 * * *' ;;
-    esac
+    printf '%d 10 * * *' "$CRON_MINUTE"
 }
 
 cp -a "${TEMPLATE}" "${TARGET}"
-mkdir -p "${TARGET}/patches"
 
 while IFS= read -r -d '' file; do
     if grep -qE '__GO_MINOR(__|_DIR__)?|__PACKAGING_CRON__' "${file}" 2>/dev/null; then

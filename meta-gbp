@@ -180,30 +180,6 @@ def _current_tag() -> re.Match[str]:
     return match
 
 
-def _current_tag_from_changelog(dist: str | None = None) -> re.Match[str]:
-    if dist is None:
-        dist = sorted(os.listdir('changelogs/mainline'))[0]
-    version = _cmd_o(
-        TOOLS, 'dpkg-parsechangelog',
-        '--file', f'changelogs/mainline/{dist}',
-        '--show-field=version',
-    ).strip()
-    parsed = re.fullmatch(
-        r'^(\d+\.\d+\.\d+)((?:~(?:rc|beta)\d+)?)-\d+(?:\+[a-z0-9.~-]+)?$',
-        version,
-    )
-    if parsed is None:
-        raise SystemExit(f'unexpected changelog version: {version}')
-    extra = parsed.group(2).lstrip('~') if parsed.group(2) else ''
-    tag = f'go{parsed.group(1)}'
-    if extra:
-        tag = f'go{parsed.group(1)}{extra}'
-    match = VERSION_RE.fullmatch(tag)
-    if match is None:
-        raise SystemExit(f'Unexpected tag from changelog: {tag}')
-    return match
-
-
 def _resolve_latest_patch(minor: str) -> str:
     return subprocess.check_output(
         (sys.executable, RESOLVE_PATCH, minor),

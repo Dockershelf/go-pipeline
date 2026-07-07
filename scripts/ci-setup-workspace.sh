@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare CI workspace and export GHCR image env vars.
+# Prepare CI workspace: init go submodule and export image env vars.
 #
 # Usage:
 #   GO_REPO_DIR=/path/to/go1.25 PIPELINE_DIR=/path/to/go-pipeline \
@@ -33,8 +33,10 @@ if [[ ! -f "$GO_REPO_DIR/.gitmodules" ]]; then
     exit 1
 fi
 
-git -C "$GO_REPO_DIR" submodule update --init go
-git -C "$GO_REPO_DIR/go" fetch --tags origin
+git -C "$GO_REPO_DIR" submodule update --init go || true
+if [[ -d "$GO_REPO_DIR/go/.git" ]]; then
+    git -C "$GO_REPO_DIR/go" fetch --tags origin || true
+fi
 
 export GO_REPO_DIR
 export PIPELINE_DIR

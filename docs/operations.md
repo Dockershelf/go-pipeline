@@ -18,20 +18,25 @@ Maintainer runbook for the Dockershelf Go repackaging pipeline.
 
 ## 2. Bump Go patch version
 
-1. Download the latest patch into the packaging repo:
+1. Run `meta-gbp update` to fetch the latest upstream patch on the release
+   branch, rebase any local patches, update changelogs, and commit the new
+   `go/` submodule pointer:
    ```bash
    cd ../go1.25
-   # re-run seed logic or manually replace go/ from a fresh tarball
+   ../go-pipeline/meta-gbp update --no-interactive
    ```
-2. Commit the updated `go/` tree and refresh changelogs:
-   ```bash
-   ../go-pipeline/meta-gbp changelog -m "Update to Go X.Y.Z."
-   ```
-3. Materialize and build:
+   (Drop `--no-interactive` to resolve rebase conflicts interactively.)
+2. Materialize and build:
    ```bash
    cd ../go-pipeline
    make materialize GO=1.25 DIST=trixie
    make build GO=1.25
+   ```
+3. For a packaging-only rebuild (no upstream change), bump the changelog
+   counter instead:
+   ```bash
+   cd ../go1.25
+   ../go-pipeline/meta-gbp changelog -m "Rebuild for trixie."
    ```
 
 ## 3. Add a new Debian suite
