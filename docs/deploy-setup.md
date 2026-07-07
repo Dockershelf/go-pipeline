@@ -43,7 +43,6 @@ Do **not** run a second droplet bootstrap for Go. Follow the Python pipeline gui
 
 | Secret / variable | Go-specific? |
 |-----------------|----------------|
-| `GH_PACKAGES_TOKEN` | Optional — for `dockershelf-go-builder` GHCR push on `go-pipeline` |
 | `DEPLOY_*` | No — reuse org-level from Python setup |
 
 Run `./scripts/ci-check-config.sh --strict` from `go-pipeline/` to verify configuration.
