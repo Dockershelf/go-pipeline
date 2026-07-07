@@ -4,8 +4,7 @@ export DH_VERBOSE = 1
 export DEB_BUILD_OPTIONS=nostrip
 
 # Use the distro's golang-any as the bootstrap compiler.
-# make.bash will find it via $PATH and use $(go env GOROOT) as GOROOT_BOOTSTRAP.
-export GOROOT_BOOTSTRAP = /usr
+export GOROOT_BOOTSTRAP := $(shell go env GOROOT)
 
 %:
 	dh $@
