@@ -118,7 +118,6 @@ def _validate_meta_gbp_dir() -> None:
     for path in (
         'changelogs/mainline',
         'debiandirs',
-        'patches',
     ):
         if not os.path.exists(path):
             raise SystemExit(f'not a meta-gbp repo? missing ./{path}')
