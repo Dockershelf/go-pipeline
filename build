@@ -49,22 +49,19 @@ def main() -> NoReturn:
     print(f'Running build for {ARCH} (results will be in {dist_dir})')
     print('*' * 79)
     os.makedirs(dist_dir, exist_ok=True)
-    gbp_args = '-us -uc'
-    gpg_setup = 'chmod 700 ~/.gnupg && ' if _gpg_volumes() else ''
     # Filter out _all.deb on non-amd64 arches (built only on amd64 to avoid duplicates)
-    copy_filter = ''
+    deb_filter = '-name "*.deb"'
     if ARCH != 'amd64':
-        copy_filter = r"! -name '*_all.deb'"
+        deb_filter = '-name "*.deb" ! -name "*_all.deb"'
     prog = (
-        f'{gpg_setup}'
         f'apt-get update -qq && '
-        f'cp -a /code /tmp/build-tree && '
-        f'git config --global --add safe.directory /tmp/build-tree && '
-        f'cd /tmp/build-tree && '
-        f'apt-get build-dep -y -o Debug::pkgProblemResolver=yes . && '
-        f'git clean -fxfd && '
-        f'gbp buildpackage {gbp_args} --git-pristine-tar --git-debian-branch=debian/{dist} && '
-        f'find .. -maxdepth 1 -type f -name "*.deb" {copy_filter} | xargs --replace cp {{}} /dist'
+        f'mk-build-deps --install --remove --tool "apt-get --yes" /code/debian/control && '
+        f'mkdir -p /tmp/build && '
+        f'cp -a /code/go /code/debian /tmp/build/ && '
+        f'cd /tmp/build && '
+        f'dpkg-buildpackage -us -uc -b && '
+        f'find .. -maxdepth 1 -type f \\( {deb_filter} -o -name "*.changes" \\) '
+        f'-exec cp {{}} /dist/ \\;'
     )
     cmd = (
         DOCKER_RUN,

@@ -211,42 +211,23 @@ def _resolve_latest_patch(minor: str) -> str:
     ).strip()
 
 
+def _ignore_git(_dir: str, names: list[str]) -> set[str]:
+    return {'.git'} if '.git' in names else set()
+
+
 def _mainline_repo(dist: str) -> int:
     _cmd_q('rm', '-rf', 'work')
+    os.makedirs('work', exist_ok=True)
 
-    _cmd_q('git', 'init', 'work')
-
-    v_match = _current_tag()
-    version = Version(v_match[1], v_match[2] or '')
-
-    with tempfile.TemporaryDirectory() as td:
-        dest = os.path.join(td, version.filename)
-        _cmd_q(
-            'curl', '-fsSL', version.download_url, '-o', dest,
-        )
-
-        _cmd_q(
-            TOOLS,
-            '--volume', f'{dest}:{dest}:ro',
-            'gbp', 'import-orig', dest,
-            '--pristine-tar',
-            '--upstream-branch', 'upstream',
-            '--no-interactive',
-            '--no-symlink-orig',
-            '--no-merge',
-            cwd='work',
-        )
-
-    git = ('git', '-C', 'work')
-
-    _cmd_q(*git, 'checkout', 'upstream', '-b', f'debian/{dist}')
-
+    shutil.copytree('go', 'work/go', symlinks=True, ignore=_ignore_git)
     shutil.copytree(f'debiandirs/{dist}', 'work/debian')
     shutil.copy(f'changelogs/mainline/{dist}', 'work/debian/changelog')
     if os.path.isdir('patches') and os.listdir('patches'):
         shutil.copytree('patches', 'work/debian/patches')
 
-    _cmd_q(*git, 'add', 'debian')
+    _cmd_q('git', 'init', 'work')
+    git = ('git', '-C', 'work')
+    _cmd_q(*git, 'add', '-A')
     _cmd_q(*git, 'commit', '-q', '-m', f'meta-gbp: init for {dist}')
 
     return 0
