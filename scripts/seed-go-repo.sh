@@ -24,13 +24,12 @@ fi
 
 MINOR_DIR="go${MINOR}"
 
-# Auto-stagger the packaging cron schedule so each go minor line runs at a
-# different minute, avoiding all lines hitting GH Actions at once. Schedule
-# at 10:00 UTC, offset by (minor_index * 5) minutes, wrapping within the hour.
+# Stagger Go builds: Wednesdays, every 2 hours starting at 04:00
+# go1.22=04:00, go1.23=06:00, go1.24=08:00, go1.25=10:00, go1.26=12:00, etc.
 MINOR_INDEX="$(echo "$MINOR" | awk -F. '{print $2}')"
-CRON_MINUTE=$(( (MINOR_INDEX * 5) % 60 ))
+CRON_HOUR=$(( (MINOR_INDEX - 22) * 2 + 4 ))
 packaging_cron() {
-    printf '%d 10 * * *' "$CRON_MINUTE"
+    printf '0 %d * * 3' "$CRON_HOUR"
 }
 
 cp -a "${TEMPLATE}" "${TARGET}"
