@@ -37,7 +37,7 @@ export DOCKERSHELF_DEPLOY_INCOMING ?= /var/www/debian/incoming
 export DOCKERSHELF_APT_URL ?= https://apt.dockershelf.com/dockershelf
 export DOCKERSHELF_GITHUB_ORG ?= Dockershelf
 
-GO_VERSIONS := 1.20 1.21 1.22 1.23 1.24 1.25
+GO_VERSIONS := 1.22 1.23 1.24 1.25
 
 .PHONY: all bootstrap clone-go-repos build-tools-image generate-dockerfiles build-builder-images \
 	materialize build publish smoke list-dists help
