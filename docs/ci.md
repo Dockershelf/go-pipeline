@@ -149,6 +149,7 @@ To verify both paths locally:
 | Builder image pull fails | CI falls back to local docker build from committed `dockerfiles/` (slow) |
 | Smoke test `apt-get -f install` fails | Check missing runtime deps in generated `.deb` set |
 | Publish SSH/rsync fails | Verify `DEPLOY_*` variables and `DEPLOY_SSH_KEY`; run **Deploy connectivity** workflow |
+| Push update commits non-fast-forward | Workflow fetches `main` and rebases before push; if rebase conflicts, resolve locally and re-run |
 
 ## Verification checklist
 
