@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-REPOS=(go-pipeline go1.20 go1.21 go1.22 go1.23 go1.24 go1.25)
+REPOS=(go-pipeline go1.22 go1.23 go1.24 go1.25 go1.26)
 REQUIRED_SECRET=DEPLOY_SSH_KEY
 REQUIRED_VARS=(DEPLOY_HOST DEPLOY_USER DEPLOY_DIR DEPLOY_INCOMING)
 

@@ -3,8 +3,27 @@
 export DH_VERBOSE = 1
 export DEB_BUILD_OPTIONS=nostrip
 
-# Use the distro's golang-any as the bootstrap compiler.
+# Determine minimum bootstrap version from Go source (Go 1.24+).
+MIN_BOOTSTRAP := $(shell grep 'const minBootstrap' go/src/cmd/dist/buildtool.go 2>/dev/null | cut -d'"' -f2 | sed 's/go//')
+
+# Check if distro's golang-any meets minimum bootstrap requirement.
+DISTRO_GO_VERSION := $(shell go version 2>/dev/null | awk '{print $$3}' | sed 's/go//' || echo "0.0.0")
+ifeq ($(MIN_BOOTSTRAP),)
+# Older Go trees lack minBootstrap; use distro compiler.
+BOOTSTRAP_SUFFICIENT := yes
 export GOROOT_BOOTSTRAP := $(shell go env GOROOT)
+BOOTSTRAP_DIR :=
+else
+BOOTSTRAP_SUFFICIENT := $(shell printf '%s\n%s\n' "$(MIN_BOOTSTRAP)" "$(DISTRO_GO_VERSION)" | sort -V | head -1 | grep -q "$(MIN_BOOTSTRAP)" && echo "yes" || echo "no")
+BOOTSTRAP_DIR := $(CURDIR)/.go-bootstrap
+BOOTSTRAP_ARCH := $(shell dpkg --print-architecture)
+BOOTSTRAP_URL := https://go.dev/dl/go$(MIN_BOOTSTRAP).linux-$(BOOTSTRAP_ARCH).tar.gz
+ifeq ($(BOOTSTRAP_SUFFICIENT),yes)
+export GOROOT_BOOTSTRAP := $(shell go env GOROOT)
+else
+export GOROOT_BOOTSTRAP := $(BOOTSTRAP_DIR)/go
+endif
+endif
 
 %:
 	dh $@
@@ -12,8 +31,17 @@ export GOROOT_BOOTSTRAP := $(shell go env GOROOT)
 override_dh_auto_configure:
 	@echo "Go source needs no configure step."
 
-override_dh_auto_build:
+override_dh_auto_build: ensure_bootstrap
 	cd go/src && ./make.bash
+
+ensure_bootstrap:
+ifeq ($(BOOTSTRAP_SUFFICIENT),yes)
+	@echo "Distro Go $(DISTRO_GO_VERSION) meets bootstrap requirement; using $(GOROOT_BOOTSTRAP)"
+else
+	@echo "Distro Go $(DISTRO_GO_VERSION) < required $(MIN_BOOTSTRAP); downloading..."
+	mkdir -p $(BOOTSTRAP_DIR)
+	curl -fsSL $(BOOTSTRAP_URL) | tar -xz -C $(BOOTSTRAP_DIR)
+endif
 
 override_dh_auto_install:
 	mkdir -p debian/golang-__GO_MINOR__-go/usr/lib/go-__GO_MINOR__
@@ -30,3 +58,9 @@ override_dh_dwz:
 
 override_dh_shlibdeps:
 	@echo "Skipping shlibdeps — Go produces statically linked binaries."
+
+override_dh_auto_clean:
+ifneq ($(BOOTSTRAP_DIR),)
+	rm -rf $(BOOTSTRAP_DIR)
+endif
+	dh_auto_clean

@@ -24,10 +24,10 @@ fi
 
 MINOR_DIR="go${MINOR}"
 
-# Stagger Go builds: Wednesdays, every 2 hours starting at 04:00
-# go1.22=04:00, go1.23=06:00, go1.24=08:00, go1.25=10:00, go1.26=12:00, etc.
+# Stagger Go builds: Wednesdays, every 2 hours with modulo 24 wrapping
+# Ensures no collisions with 5-version limit and auto-wraps past midnight
 MINOR_INDEX="$(echo "$MINOR" | awk -F. '{print $2}')"
-CRON_HOUR=$(( (MINOR_INDEX - 22) * 2 + 4 ))
+CRON_HOUR=$(( ((MINOR_INDEX - 22) * 2 + 4) % 24 ))
 packaging_cron() {
     printf '0 %d * * 3' "$CRON_HOUR"
 }

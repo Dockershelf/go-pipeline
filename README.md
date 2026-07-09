@@ -11,12 +11,11 @@ Clone this repo as a sibling of the `go*` packaging repos:
 ```text
 dockershelf-pipeline/
 ├── go-pipeline/     # this repo
-├── go1.20/
-├── go1.21/
 ├── go1.22/
 ├── go1.23/
 ├── go1.24/
-└── go1.25/
+├── go1.25/
+└── go1.26/
 ```
 
 ## Quick start
@@ -60,7 +59,7 @@ Copy `config.env.example` to `config.env`. See `debian-repo-setup/README.md` for
 
 | Local path (sibling) | Remote |
 |----------------------|--------|
-| `../go1.20/` … `../go1.25/` | `https://github.com/Dockershelf/go1.XX` |
+| `../go1.22/` … `../go1.26/` | `https://github.com/Dockershelf/go1.XX` |
 
 `make bootstrap` clones any missing `go*` repos from GitHub, or seeds them from `templates/go-packaging/` when remotes are unavailable.
 

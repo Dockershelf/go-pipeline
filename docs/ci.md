@@ -1,7 +1,7 @@
 # GitHub Actions CI
 
 Continuous integration for Dockershelf Go repackaging: builder images on GHCR, scheduled
-`meta-gbp update` / build / smoke test / APT publish across `go1.20`–`go1.25`.
+`meta-gbp update` / build / smoke test / APT publish across `go1.22`–`go1.26`.
 
 Multi-arch (amd64 + arm64) is supported via the `arches` dispatch input and the
 `arches-json` reusable-workflow input. arm64 jobs run on `ubuntu-24.04-arm` runners.
@@ -96,12 +96,11 @@ Packaging runs **weekly on Thursday** (2 days before Dockershelf consumer images
 
 | Repo | Cron | Notes |
 |------|------|-------|
-| go1.20 | `0 0 * * 4` | Thursday 00:00 |
-| go1.21 | `0 2 * * 4` | Thursday 02:00 |
 | go1.22 | `0 4 * * 4` | Thursday 04:00 |
 | go1.23 | `0 6 * * 4` | Thursday 06:00 |
 | go1.24 | `0 8 * * 4` | Thursday 08:00 |
 | go1.25 | `0 10 * * 4` | Thursday 10:00 |
+| go1.26 | `0 12 * * 4` | Thursday 12:00 |
 
 Scheduled runs publish when deploy variables and `DEPLOY_SSH_KEY` are configured. Use `workflow_dispatch` with `publish: false` to build and smoke-test only, and `arches` (JSON array, default `["amd64"]`) to select architectures.
 
@@ -127,12 +126,26 @@ Scheduled runs publish when deploy variables and `DEPLOY_SSH_KEY` are configured
 
 CI builds run on `ubuntu-latest` (amd64) or `ubuntu-24.04-arm` (arm64) depending on the `arches` matrix. The `update` job sets `GO_CI_ARCH` so `meta-gbp update` records the correct architecture in the packaging metadata. Published `.deb` packages contain the official Go toolchain for the target arch.
 
+## Bootstrap compiler fallback
+
+Every `go1.XX` packaging repo and the seed template share the same `debian/rules` bootstrap logic. During `dpkg-buildpackage`, rules read `minBootstrap` from `go/src/cmd/dist/buildtool.go` (Go 1.24+) and compare it with the distro `golang-any` version installed in the builder image.
+
+- **Sufficient distro Go:** `GOROOT_BOOTSTRAP` is set from `go env GOROOT`; no download.
+- **Insufficient distro Go:** rules download the official tarball from `https://go.dev/dl/` into `.go-bootstrap/` and use that as `GOROOT_BOOTSTRAP`.
+- **Older Go trees** (before `minBootstrap` existed): always use the distro compiler.
+
+When the fallback downloads a bootstrap compiler, builds need outbound HTTPS to `go.dev`. Builder images include `curl` via `Build-Depends` in `debian/control`.
+
+To verify both paths locally:
+
+1. **Download path:** build go1.26 on trixie (distro Go is typically older than `minBootstrap`).
+2. **Distro path:** build go1.25 on trixie or go1.26 on unstable (distro Go meets the requirement).
+
 ## Failure modes
 
 | Failure | Action |
 |---------|--------|
 | `meta-gbp update` / `dch` exit 25 | Changelog heading has a space before `)`; fix with `dch` locally |
-| `go1.20` not on go.dev | Skip repo in bootstrap or pin last known patch manually |
 | Builder image pull fails | CI falls back to local docker build from committed `dockerfiles/` (slow) |
 | Smoke test `apt-get -f install` fails | Check missing runtime deps in generated `.deb` set |
 | Publish SSH/rsync fails | Verify `DEPLOY_*` variables and `DEPLOY_SSH_KEY`; run **Deploy connectivity** workflow |

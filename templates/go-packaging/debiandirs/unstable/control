@@ -4,6 +4,7 @@ Priority: optional
 Maintainer: Luis Alejandro Martínez Faneyth <luis@luisalejandro.org>
 Build-Depends: debhelper-compat (= 13),
                golang-any,
+               curl,
                gcc,
                libc6-dev,
                git-buildpackage,
