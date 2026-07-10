@@ -1,4 +1,4 @@
-# go__GO_MINOR_DIR__
+# __GO_MINOR_DIR__
 
 Debian packaging for Go __GO_MINOR__: compiles the Go toolchain from the official [golang/go](https://github.com/golang/go) source tree into `golang-__GO_MINOR__-go` packages for enterprise `.deb`-only installs.
 
