@@ -84,6 +84,17 @@ def _is_dev_snapshot(v_match: re.Match[str]) -> bool:
     return bool(v_match[3])
 
 
+def _describe_at(rev: str) -> re.Match[str]:
+    git = ('git', '-C', 'go')
+    tag = _cmd_o(
+        *git, 'describe', '--abbrev=10', '--tags', '--match', 'go*', rev,
+    ).rstrip()
+    match = VERSION_RE.fullmatch(tag)
+    if match is None:
+        raise SystemExit(f'Unexpected tag at {rev}: {tag}')
+    return match
+
+
 def _p_cmd(cmd: tuple[str, ...], cwd: str | None) -> None:
     cwd_s = f'({cwd})' if cwd else ''
     print(f'{cwd_s}+ {shlex.join(cmd)}', file=sys.stderr)
@@ -261,20 +272,33 @@ def _update_target() -> str:
 
     current = _cmd_o(*git, 'rev-parse', 'HEAD').strip()
 
-    log_output = _cmd_o(
+    for rev in _cmd_o(
         *git, 'log',
         '--reverse',
         '--decorate-refs=refs/tags/',
         '--format=%H',
         '--simplify-by-decoration',
         'HEAD..go-upstream',
-    )
-    for line in log_output.splitlines():
-        if line == current:
+    ).splitlines():
+        if rev == current:
             continue
-        return line
+        if not _is_dev_snapshot(_describe_at(rev)):
+            return rev
 
-    return _cmd_o(*git, 'rev-parse', 'go-upstream').strip()
+    return current
+
+
+def _pin_go_to_release_tag() -> str | None:
+    """If go HEAD is past a tag, check out that release tag. Returns tag name."""
+    git = ('git', '-C', 'go')
+    head = _cmd_o(*git, 'rev-parse', 'HEAD').strip()
+    if not _is_dev_snapshot(_describe_at(head)):
+        return None
+    tag = _cmd_o(*git, 'describe', '--abbrev=0', '--tags', '--match', 'go*').strip()
+    if _cmd_o(*git, 'rev-parse', tag).strip() == head:
+        return None
+    _cmd_q(*git, 'checkout', tag)
+    return tag
 
 
 def _update(*, rev: str | None, interactive: bool) -> int:
@@ -283,6 +307,10 @@ def _update(*, rev: str | None, interactive: bool) -> int:
 
     current_rev = _cmd_o('git', '-C', 'go', 'rev-parse', 'HEAD').strip()
     if current_rev == rev:
+        pinned = _pin_go_to_release_tag()
+        if pinned is not None:
+            _cmd_q('git', 'add', 'go')
+            _cmd_q('git', 'commit', '-m', f'go: pin to release {pinned}')
         print('already up to date!', file=sys.stderr)
         return 0
 
