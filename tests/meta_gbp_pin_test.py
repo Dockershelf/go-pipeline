@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import importlib.machinery
@@ -6,6 +5,7 @@ import importlib.util
 import os
 import subprocess
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -14,7 +14,7 @@ HERE = Path(__file__).resolve().parents[1]
 META_GBP = HERE / 'meta-gbp'
 
 
-def _load_meta_gbp():
+def _load_meta_gbp() -> types.ModuleType:
     loader = importlib.machinery.SourceFileLoader('meta_gbp', str(META_GBP))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     assert spec is not None and spec.loader is not None
@@ -63,7 +63,10 @@ class PinAndUpdateTargetTests(unittest.TestCase):
         _git(str(self.go), 'add', 'README')
         _git(str(self.go), 'commit', '-m', 'Working on go1.26.6')
         _git(str(self.go), 'branch', '-M', 'release-branch.go1.26')
-        _git(str(self.go), 'checkout', '-B', 'master', 'release-branch.go1.26')
+        _git(
+            str(self.go), 'checkout', '-B', 'master',
+            'release-branch.go1.26',
+        )
         _git(str(self.root), 'init')
         _git(str(self.root), 'config', 'user.email', 'test@example.com')
         _git(str(self.root), 'config', 'user.name', 'test')
@@ -98,24 +101,24 @@ class PinAndUpdateTargetTests(unittest.TestCase):
         tag = _git(str(self.go), 'rev-parse', 'go1.26.5')
         self.assertEqual(head, tag)
 
-    def test_update_target_returns_current_when_already_on_branch_tip(self) -> None:
+    def test_update_target_returns_current_on_branch_tip(self) -> None:
         self.mod._pin_go_to_release_tag()
         _git(str(self.go), 'checkout', 'release-branch.go1.26')
         tip = _git(str(self.go), 'rev-parse', 'HEAD')
         _git(str(self.go), 'branch', '-f', 'go-upstream', tip)
 
-        original_cmd_q = self.mod._cmd_q
+        original_cmd_q = getattr(self.mod, '_cmd_q')
 
         def _cmd_q_noop(*cmd: str, cwd: str | None = None) -> None:
             if cmd[:3] == ('git', '-C', 'go') and 'fetch' in cmd:
                 return None
             return original_cmd_q(*cmd, cwd=cwd)
 
-        self.mod._cmd_q = _cmd_q_noop  # type: ignore[method-assign]
+        setattr(self.mod, '_cmd_q', _cmd_q_noop)
         try:
             got = self.mod._update_target()
         finally:
-            self.mod._cmd_q = original_cmd_q  # type: ignore[method-assign]
+            setattr(self.mod, '_cmd_q', original_cmd_q)
         self.assertEqual(got, tip)
 
 

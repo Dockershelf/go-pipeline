@@ -12,14 +12,12 @@ from __future__ import annotations
 
 import argparse
 import functools
-import os
 import os.path
 import re
 import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
 from typing import NamedTuple
 
 _DIRNAME_PAT = re.compile(r'^go(\d+\.\d+)$')
@@ -70,7 +68,7 @@ class Version(NamedTuple):
         if not match or _is_dev_snapshot(match):
             raise ValueError(
                 f'expected a release tag (e.g. go1.22.5), got {s}; '
-                'checkout go at an upstream release tag'
+                'checkout go at an upstream release tag',
             )
         return cls(match[1], match[2])
 
@@ -120,7 +118,7 @@ def _cmd_o(*cmd: str, cwd: str | None = None) -> str:
     return ret.stdout
 
 
-def _cmd_r(*cmd: str, cwd: str | None) -> int:
+def _cmd_r(*cmd: str, cwd: str | None = None) -> int:
     _p_cmd(cmd, cwd)
     return subprocess.call(cmd, cwd=cwd)
 
@@ -185,7 +183,7 @@ def _current_tag() -> re.Match[str]:
     if not match[1].startswith(f'{minor}.'):
         raise SystemExit(
             f'go submodule is at {match[1]} but repo is go{minor}; '
-            f'checkout release-branch.go{minor} in the go/ submodule'
+            f'checkout release-branch.go{minor} in the go/ submodule',
         )
 
     return match
