@@ -45,6 +45,7 @@ Maintainer runbook for the Dockershelf Go repackaging pipeline.
 2. Add `changelogs/mainline/<new-suite>` and `changelogs/nightly/<new-suite>`.
 3. Add the suite to `DOCKERSHELF_SUITES` in `config.env`.
 4. Run `make generate-dockerfiles && make build-builder-images`.
+5. Add a stanza to [`reprepro-distributions`](https://github.com/Dockershelf/dockershelf-apt/blob/main/reprepro-distributions) in [dockershelf-apt](https://github.com/Dockershelf/dockershelf-apt), then re-run `bootstrap-droplet.sh` on the droplet (or copy `conf/distributions`).
 
 ## 4. Publish to APT repository
 

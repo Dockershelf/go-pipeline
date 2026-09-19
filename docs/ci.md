@@ -32,7 +32,7 @@ Scripts:
 - [`scripts/ci-pull-builder-images.sh`](../scripts/ci-pull-builder-images.sh) — pull GHCR images or build locally
 - [`scripts/resolve-go-patch.py`](../scripts/resolve-go-patch.py) — latest patch from go.dev (used by `meta-gbp update` and seed)
 - [`scripts/debian-smoke-test.sh`](../scripts/debian-smoke-test.sh) — install `.deb`s in `debian:{suite}-slim`
-- [`scripts/ci-publish.sh`](../scripts/ci-publish.sh) — rsync + `import-incoming.sh`
+- [`scripts/ci-publish.sh`](../scripts/ci-publish.sh) — rsync + `/usr/local/bin/dockershelf-import-incoming`
 - [`scripts/ci-deploy-preflight.sh`](../scripts/ci-deploy-preflight.sh) — validate `DEPLOY_*` vars (optional `--connectivity`)
 
 ## GHCR images
@@ -53,7 +53,7 @@ Configure on **`Dockershelf/go-pipeline`** and each **`go1.XX`** repo (or at org
 
 Run [`scripts/ci-check-config.sh`](../scripts/ci-check-config.sh) to list which secrets/variables are set (values are never printed). Use `--strict` to fail when deploy configuration is incomplete.
 
-Full droplet + GitHub wiring: [`docs/deploy-setup.md`](deploy-setup.md).
+Full droplet + GitHub wiring: [dockershelf-apt/docs/deploy-setup.md](https://github.com/Dockershelf/dockershelf-apt/blob/main/docs/deploy-setup.md). Pipeline notes: [`docs/deploy-setup.md`](deploy-setup.md).
 
 ### Secrets
 

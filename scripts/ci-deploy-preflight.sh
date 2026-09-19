@@ -6,7 +6,7 @@
 #     ./scripts/ci-deploy-preflight.sh
 #
 # Options:
-#   --connectivity   Also verify SSH login and incoming directory exist.
+#   --connectivity   Also verify SSH login, incoming directory, and import binary.
 
 set -euo pipefail
 
@@ -44,6 +44,9 @@ if [[ "$CONNECTIVITY" -eq 1 ]]; then
     ssh -o BatchMode=yes -o ConnectTimeout=15 \
         "${DEPLOY_USER}@${DEPLOY_HOST}" \
         "test -d '${DEPLOY_INCOMING}'"
+    ssh -o BatchMode=yes -o ConnectTimeout=15 \
+        "${DEPLOY_USER}@${DEPLOY_HOST}" \
+        "test -x /usr/local/bin/dockershelf-import-incoming"
     echo "SSH connectivity OK (${DEPLOY_USER}@${DEPLOY_HOST}, incoming=${DEPLOY_INCOMING})"
 else
     echo "deploy variables OK (${DEPLOY_USER}@${DEPLOY_HOST})"

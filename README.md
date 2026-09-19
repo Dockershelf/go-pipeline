@@ -53,7 +53,7 @@ Because Go is repackaged from official precompiled tarballs, builder images only
 
 ## Configuration
 
-Copy `config.env.example` to `config.env`. See `debian-repo-setup/README.md` for droplet APT hosting (shared with Python and Node packages).
+Copy `config.env.example` to `config.env`. Droplet APT hosting: [dockershelf-apt](https://github.com/Dockershelf/dockershelf-apt). Pipeline publish wiring: [docs/deploy-setup.md](docs/deploy-setup.md).
 
 ## Source repositories
 

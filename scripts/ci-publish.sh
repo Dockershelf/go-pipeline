@@ -17,13 +17,12 @@ REPO_ROOT="${DEPLOY_DIR:?DEPLOY_DIR required}"
 INCOMING="${DEPLOY_INCOMING:?DEPLOY_INCOMING required}"
 
 DIST_DIR="$(cd "$DIST_DIR" && pwd)"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMPORT_SCRIPT="$SCRIPT_DIR/../debian-repo-setup/import-incoming.sh"
+IMPORT_BIN="/usr/local/bin/dockershelf-import-incoming"
 
 # Per-arch incoming subdir (avoids clobbering between concurrent arch publishes).
 # Use a unique per-publish subdir so concurrent publishes (from different repos
 # or pipelines sharing the same droplet) cannot see or delete each other's
-# files — import-incoming.sh only processes the subdir it is given.
+# files — dockershelf-import-incoming only processes the subdir it is given.
 REMOTE_INCOMING_BASE="${INCOMING}/${ARCH}"
 PUBLISH_ID="$(date -u +%Y%m%dT%H%M%S)-$$-${RANDOM}"
 REMOTE_INCOMING="${REMOTE_INCOMING_BASE}/${PUBLISH_ID}"
@@ -40,7 +39,6 @@ ssh "${USER}@${HOST}" "mkdir -p ${REMOTE_INCOMING}"
 rsync -av "${debs[@]}" "${USER}@${HOST}:${REMOTE_INCOMING}/"
 
 ssh "${USER}@${HOST}" \
-    "REPO_ROOT=${REPO_ROOT} INCOMING=${INCOMING} bash -s ${CODENAME} ${ARCH} ${PUBLISH_ID}" \
-    <"$IMPORT_SCRIPT"
+    "REPO_ROOT=${REPO_ROOT} INCOMING=${INCOMING} ${IMPORT_BIN} ${CODENAME} ${ARCH} ${PUBLISH_ID}"
 
 echo "Published to ${CODENAME}/${ARCH}"

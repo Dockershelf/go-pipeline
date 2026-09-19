@@ -1,9 +1,12 @@
 # APT deploy setup (Go pipeline)
 
-Go packages publish to the **same** DigitalOcean APT droplet and repository tree as Python and Node packages.
-Org-level `DEPLOY_*` variables and `DEPLOY_SSH_KEY` configured for [python-pipeline](../python-pipeline/docs/deploy-setup.md) apply here without duplication.
+Go packages publish to the **same** DigitalOcean APT droplet as Python and Node. Org-level `DEPLOY_*` variables and `DEPLOY_SSH_KEY` apply here without duplication.
+
+Droplet bootstrap, DNS, TLS, and the import binary live in **[dockershelf-apt](https://github.com/Dockershelf/dockershelf-apt)**. Do **not** run a second droplet bootstrap.
 
 Public repository URL: **`https://apt.dockershelf.com/dockershelf/`**
+
+Canonical checklist: [dockershelf-apt/docs/deploy-setup.md](https://github.com/Dockershelf/dockershelf-apt/blob/main/docs/deploy-setup.md).
 
 ## Architecture
 
@@ -11,37 +14,30 @@ Public repository URL: **`https://apt.dockershelf.com/dockershelf/`**
 go1.XX workflow  →  update-meta-gbp.yml  →  build  →  smoke  →  publish
                                                                     │
                                                                     ├─ rsync → /var/www/debian/incoming/
-                                                                    └─ SSH  → import-incoming.sh → reprepro
+                                                                    └─ SSH  → /usr/local/bin/dockershelf-import-incoming
                                                                                     │
                                                                               nginx /dockershelf/
 ```
 
-## What is shared with Python and Node
+## What is shared
 
 | Item | Notes |
 |------|-------|
 | Droplet host | `apt.dockershelf.com` |
 | Repository root | `/var/www/debian` |
 | Incoming directory | `/var/www/debian/incoming` |
+| Import binary | `/usr/local/bin/dockershelf-import-incoming` |
 | Nginx path | `/dockershelf/` → `/var/www/debian/` |
 | `DEPLOY_SSH_KEY` | Org secret |
 | `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_DIR`, `DEPLOY_INCOMING` | Org variables |
 
 Go, Node, and Python packages share `trixie` and `unstable` codenames in the same `reprepro` configuration.
 
-## Bootstrap and TLS
-
-Do **not** run a second droplet bootstrap for Go. Follow the Python pipeline guide:
-
-- [python-pipeline/docs/deploy-setup.md](https://github.com/Dockershelf/python-pipeline/blob/main/docs/deploy-setup.md) — DNS, TLS, GitHub secrets/variables
-- [python-pipeline/debian-repo-setup/bootstrap-droplet.sh](https://github.com/Dockershelf/python-pipeline/blob/main/debian-repo-setup/bootstrap-droplet.sh)
-- [python-pipeline/debian-repo-setup/create-ci-deploy-key.sh](https://github.com/Dockershelf/python-pipeline/blob/main/debian-repo-setup/create-ci-deploy-key.sh)
-
 ## Go-specific GitHub setup
 
 | Secret / variable | Go-specific? |
 |-----------------|----------------|
-| `DEPLOY_*` | No — reuse org-level from Python setup |
+| `DEPLOY_*` | No — reuse org-level from dockershelf-apt setup |
 
 Run `./scripts/ci-check-config.sh --strict` from `go-pipeline/` to verify configuration.
 

@@ -254,7 +254,6 @@ jobs:
           path: go-pipeline
           sparse-checkout: |
             scripts
-            debian-repo-setup
 
       - name: Check if already published
         id: published
