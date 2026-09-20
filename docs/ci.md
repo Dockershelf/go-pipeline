@@ -1,7 +1,7 @@
 # GitHub Actions CI
 
 Continuous integration for Dockershelf Go repackaging: builder images on GHCR, scheduled
-`meta-gbp update` / build / smoke test / APT publish across `go1.22`–`go1.26`.
+`meta-gbp update` / build / smoke test / APT publish across `go1.23`–`go1.27`.
 
 Multi-arch (amd64 + arm64) is supported via the `arches` dispatch input and the
 `arches-json` reusable-workflow input. arm64 jobs run on `ubuntu-24.04-arm` runners.
@@ -96,11 +96,11 @@ Packaging runs **weekly on Thursday** (2 days before Dockershelf consumer images
 
 | Repo | Cron | Notes |
 |------|------|-------|
-| go1.22 | `0 4 * * 4` | Thursday 04:00 |
 | go1.23 | `0 6 * * 4` | Thursday 06:00 |
 | go1.24 | `0 8 * * 4` | Thursday 08:00 |
 | go1.25 | `0 10 * * 4` | Thursday 10:00 |
 | go1.26 | `0 12 * * 4` | Thursday 12:00 |
+| go1.27 | `0 14 * * 3` | Wednesday 14:00 |
 
 Scheduled runs publish when deploy variables and `DEPLOY_SSH_KEY` are configured. Use `workflow_dispatch` with `publish: false` to build and smoke-test only, and `arches` (JSON array, default `["amd64"]`) to select architectures.
 

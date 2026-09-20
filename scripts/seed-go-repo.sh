@@ -60,8 +60,8 @@ chmod +x debiandirs/*/rules
 GO_SHA="$(curl -fsSL "https://api.github.com/repos/golang/go/branches/release-branch.go${MINOR}" \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['commit']['sha'])")"
 rm -rf go
+git add .
 git update-index --add --cacheinfo 160000 "${GO_SHA}" go
-git add .gitmodules
 git commit -m "Initial go${MINOR} Debian packaging repository"
 
 echo "Seeded ${TARGET} (run init-go-submodules.sh to fetch upstream go)"
