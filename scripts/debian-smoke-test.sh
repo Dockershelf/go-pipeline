@@ -101,10 +101,23 @@ docker exec "$CONTAINER" bash -euxc "
         echo 'no .deb files in /debs' >&2
         exit 1
     fi
+    built=(/debs/golang-1.${GO#1.}-go_*.deb)
+    if [[ \${#built[@]} -ne 1 ]]; then
+        echo \"expected exactly one golang-1.${GO#1.}-go deb, found \${#built[@]}\" >&2
+        exit 1
+    fi
+    ver=\$(dpkg-deb -f \"\${built[0]}\" Version)
     (cd /debs && dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz)
     echo 'deb [trusted=yes] file:/debs ./' > /etc/apt/sources.list.d/dockershelf-debs.list
     apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends golang-1.${GO#1.}-go
+    # The suite archive can ship a higher golang-X.Y-go (Debian sid does).
+    # That package leaves /usr/bin/go to golang-go, so install the built version.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \"golang-1.${GO#1.}-go=\${ver}\"
+    got=\$(dpkg-query -W golang-1.${GO#1.}-go | awk '{print \$2}')
+    if [[ \"\$got\" != \"\$ver\" ]]; then
+        echo \"installed golang-1.${GO#1.}-go \$got, built deb is \$ver\" >&2
+        exit 1
+    fi
     go version
     test -x /usr/bin/go
     test -x /usr/bin/gofmt
